@@ -5,6 +5,8 @@
   #define ESPACE 10
   #define BRAC 11
   #define TABULA 12
+  #define COMLINE 13
+  #define COM 14
   #define F 100
   #define X 101
   #define B 102
@@ -22,10 +24,8 @@
   #define DIVI 1006
   #define STR 1007
 %}
-
-
 ALPHANUM [0-1a-zA-Z]
-ID _?{ALPHANUM}+
+ID [_a-zA-Z][_0-1a-zA-Z]+
 DIG [0-9]
 INT (\-)?[1-9]{DIG}*|0
 OCTAL 0[0-7]+
@@ -38,13 +38,32 @@ ATR "+="|"-="|"*="|"/="|"="|"**="
 PARA "("|")"|"{"|"}"
 DI ,|;
 
+%x str
+%x comment
+%x commentLine
+
 %%
-{BOOL}          { return BOL; }
-{OCTAL}         { return O; }
-{HEX}           { return H; }
-{INT}           { return I; }
-{FLOAT}         { return F; }
-{EXP}           { return E; }
+"//"                                            BEGIN(commentLine);
+<commentLine>[^\n]*                             { return B; }
+<commentLine>\n                                 {
+                                                    BEGIN(INITIAL);
+                                                    return COMLINE;
+                                                }
+"/"+"*"                                         BEGIN(comment);
+<comment>[^*]*                                  { return B; }
+<comment>"*"+[^*/]*                             { return B; }
+
+<comment>"*"+"/"                                {
+                                                    BEGIN(INITIAL);
+                                                    return COM;
+                                                }
+
+{BOOL}                                          { return BOL; }
+{OCTAL}                                         { return O; }
+{HEX}                                           { return H; }
+{INT}                                           { return I; }
+{FLOAT}                                         { return F; }
+{EXP}                                           { return E; }
 "while"|"for"|"if"|"else"|"elif"                { return ESTRUC; }
 "fun"|"block"|"bar"|"in"|"print"                { return ESTRUC; }
 "str"|"int"|"float"|"double"|"unint"|"bool"     { return TIPO; }
@@ -52,13 +71,13 @@ DI ,|;
 {ATR}                                           { return ATRI; }
 {OP}                                            { return OPE; }
 {PARA}                                          { return P; }
-{ID}            { return IDD; }
-{DI}            { return DIVI; }
-[ ]+            { return ESPACE; }
-[\t]+           { return TABULA; }
-[\n]            { return BRAC; }
-.               { return B; }
-<<EOF>>         { return X; }
+{ID}                                            { return IDD; }
+{DI}                                            { return DIVI; }
+[ ]+                                            { return ESPACE; }
+[\t]+                                           { return TABULA; }
+[\n]                                            { return BRAC; }
+.                                               { return B; }
+<<EOF>>                                         { return X; }
 %%
 int main(int argc, char *argv[])
 {
@@ -142,6 +161,12 @@ int main(int argc, char *argv[])
                 break;
             case TABULA:
                 printf(" tabulação ");
+                break;
+            case COMLINE:
+                printf(" comentario \n");
+                break;
+            case COM:
+                printf(" comentario de mais de uma linha \n");
                 break;
         }
 	}
