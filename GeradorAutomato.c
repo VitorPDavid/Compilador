@@ -22,7 +22,8 @@
   #define TIPO 1004
   #define P 1005
   #define DIVI 1006
-  #define STR 1007
+  #define STRAP 1007
+  #define STRAS 1008
 %}
 ALPHANUM [0-1a-zA-Z]
 ID [_a-zA-Z][_0-1a-zA-Z]+
@@ -38,7 +39,8 @@ ATR "+="|"-="|"*="|"/="|"="|"**="
 PARA "("|")"|"{"|"}"
 DI ,|;
 
-%x str
+%x strAs
+%x strAp
 %x comment
 %x commentLine
 
@@ -56,6 +58,31 @@ DI ,|;
 <comment>"*"+"/"                                {
                                                     BEGIN(INITIAL);
                                                     return COM;
+                                                }
+
+\"                                              { BEGIN(strAs); }
+<strAs>\"                                       {
+                                                    BEGIN(INITIAL);
+                                                    return STRAS;
+                                                }
+<strAs>\\(.|\n)                                 {
+                                                    return B;
+                                                }
+<strAs>[^\\\n\"]+                               {
+                                                    return B;
+                                                }
+
+
+'                                               BEGIN(strAp);
+<strAp>[']                                      {
+                                                    BEGIN(INITIAL);
+                                                    return STRAP;
+                                                }
+<strAp>\\(.|\n)                                 {
+                                                    return B;
+                                                }
+<strAp>[^\\\n']+                                {
+                                                    return B;
                                                 }
 
 {BOOL}                                          { return BOL; }
@@ -156,9 +183,6 @@ int main(int argc, char *argv[])
             case DIVI:
                 printf(" virgula/pont.Virgula ");
                 break;
-            case STR:
-                printf(" uma string ");
-                break;
             case TABULA:
                 printf(" tabulação ");
                 break;
@@ -167,6 +191,12 @@ int main(int argc, char *argv[])
                 break;
             case COM:
                 printf(" comentario de mais de uma linha \n");
+                break;
+            case STRAS:
+                printf(" string com \"");
+                break;
+            case STRAP:
+                printf(" string com ' ");
                 break;
         }
 	}
