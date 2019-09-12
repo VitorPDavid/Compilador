@@ -1,6 +1,7 @@
 %{
 #include <iostream>
 #include <string>
+#include <vector>
 #include <sstream>
 
 #include <unordered_map>
@@ -26,16 +27,20 @@ typedef caracteristicas* Ptrcarac;
 
 unordered_map<string, caracteristicas> table;
 
+vector<string> bufferDeclaracoes;
+
 int yylex(void);
 void yyerror(string);
 string criaVariavelTemp(void);
-string criaCaracteristicas(string);
+string criaCaracteristicas(string, string = "");
+void imprimeBufferDeclaracoes(void);
 Ptrcarac instanciaCaracteristicas(void);
 
 %}
 
 %token TK_INT TK_FLOAT TK_EXP TK_OCTAL TK_HEX TK_BOOL
-%token TK_MAIN TK_ID TK_TIPO_INT
+%token TK_TIPO_INT TK_TIPO_BOOL TK_TIPO_DOUBLE TK_TIPO_FLOAT
+%token TK_MAIN TK_ID
 %token TK_FIM_LINHA TK_ESPACE TK_TABULACAO
 %token TK_FIM TK_ERROR
 
@@ -47,18 +52,20 @@ Ptrcarac instanciaCaracteristicas(void);
 
 %%
 
-S 			: TK_TIPO_INT TK_MAIN '(' ')' BLOCO
+S 			: COMANDOS
 			{
-				cout << "/*Compilador FOCA*/\n" << "#include <iostream>\n#include <string.h>\n#include <stdio.h>\nint main(void)\n{\n" << $5.codigo << "\treturn 0;\n}" << endl;
+				cout << "/*Compilador Kek*/\n#include <iostream>\n#include <string.h>\n#include <stdio.h>\n#define TRUE 1\n#define FALSE 0\nint main(void)\n{\n";
+				imprimeBufferDeclaracoes();
+				cout << $1.codigo << "\treturn 0;\n}" << endl;
 			}
 			;
 
-BLOCO		: '{' COMANDOS '}'
+/*BLOCO		: '{' COMANDOS '}'
 			{
 				$$.codigo = $2.codigo;
 			}
 			;
-
+*/
 COMANDOS	: COMANDO COMANDOS
 			{
 				$$.codigo = $1.codigo + $2.codigo;
@@ -76,6 +83,36 @@ COMANDO 	: E ';'
 			| ATRI ';'
 			{
 				$$ = $1;
+			}
+			| DECLARA ';'
+			{
+			    $$ = $1;
+			}
+			;
+
+DECLARA		: TK_TIPO_INT TK_ID
+			{
+				string aux = criaCaracteristicas($2.codigo);
+				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
+				$$.codigo = "";
+			}
+			| TK_TIPO_FLOAT TK_ID
+			{
+				string aux = criaCaracteristicas($2.codigo);
+				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
+				$$.codigo = "";
+			}
+			| TK_TIPO_DOUBLE TK_ID
+			{
+				string aux = criaCaracteristicas($2.codigo);
+				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
+				$$.codigo = "";
+			}
+			| TK_TIPO_BOOL TK_ID
+			{
+				string aux = criaCaracteristicas($2.codigo);
+				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
+				$$.codigo = "";
 			}
 			;
 
@@ -109,6 +146,11 @@ E 			: E '+' E
 				$$.conteudo = criaVariavelTemp();
 				$$.codigo = "\t" + $$.conteudo + "=" + $1.codigo + ";\n";
 			}
+			| TK_FLOAT
+			{
+				$$.conteudo = criaVariavelTemp();
+				$$.codigo = "\t" + $$.conteudo + "=" + $1.codigo + ";\n";
+			}
 			| TK_ID
 			{
 				$$.conteudo = criaCaracteristicas($1.codigo);
@@ -129,21 +171,18 @@ ATRI		: TK_ID '=' E
 int yyparse();
 
 
-int main( int argc, char* argv[] )
-{
+int main( int argc, char* argv[] ) {
 	yyparse();
 
 	return 0;
 }
 
-void yyerror( string MSG )
-{
+void yyerror( string MSG ) {
 	cout << MSG << endl;
 	exit (0);
 }
 
-string criaVariavelTemp(void)
-{
+string criaVariavelTemp(void) {
 	string prefixoRetornar = "tmp";
 	int sufixoRetornar = ProxVariavelTemp++;
 
@@ -152,13 +191,13 @@ string criaVariavelTemp(void)
 	return prefixoRetornar;
 }
 
-string criaCaracteristicas(string variavel){
+string criaCaracteristicas(string variavel, string tipo) {
 	unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = table.find(variavel);
 
 	if ( linhaDaVariavel == table.end() ){
 		caracteristicas novaVariavel;
 		novaVariavel.temporaria = criaVariavelTemp();
-		novaVariavel.tipo = "";
+		novaVariavel.tipo = tipo;
 		table[variavel] = novaVariavel;
 		return table[variavel].temporaria;
 	}
@@ -169,8 +208,14 @@ string criaCaracteristicas(string variavel){
 	return "";
 }
 
-Ptrcarac instanciaCaracteristicas(void)
-{
+void imprimeBufferDeclaracoes(void) {
+	for (auto declaracao : bufferDeclaracoes)
+	{
+		cout << declaracao;
+	}
+}
+
+/*Ptrcarac instanciaCaracteristicas(void) {
 	Ptrcarac instancia = (Ptrcarac)malloc(sizeof(caracteristicas));
 
 	instancia->temporaria = criaVariavelTemp();
@@ -179,6 +224,6 @@ Ptrcarac instanciaCaracteristicas(void)
 	return instancia;
 }
 
-/*int tamanhoCaracteristicas(void) {
+int tamanhoCaracteristicas(void) {
 	return sizeof()
 }*/

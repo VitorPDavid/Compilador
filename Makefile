@@ -10,6 +10,9 @@ MAIN = compilador
 # o arquivo de entrada #
 ENT = teste.txt
 
+# arquivo de saida #
+SAIDA = saida.ks
+
 # Flasg de compilação #
 FLAGS = -O3 #-Wall
 
@@ -57,6 +60,9 @@ limpar: clean
 # executa o programa #
 run:
 	-@./$(MAIN) < $(ENT)
+
+run-saida:
+	-@./$(MAIN) < $(ENT) > $(SAIDA)
 
 clean:
 	@rm -rf $(SRC)/*.c
