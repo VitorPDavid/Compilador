@@ -32,9 +32,9 @@ vector<string> bufferDeclaracoes;
 int yylex(void);
 void yyerror(string);
 string criaVariavelTemp(void);
-string criaCaracteristicas(string, string = "");
+string criaInstanciaTabela(string, string = "", bool = true);
+bool verificaTiposEmOperacoes(string,string,string&);
 void imprimeBufferDeclaracoes(void);
-Ptrcarac instanciaCaracteristicas(void);
 
 %}
 
@@ -90,27 +90,42 @@ COMANDO 	: E ';'
 			}
 			;
 
+ATRI		: TK_ID '=' E
+			{
+				string aux = criaInstanciaTabela($1.codigo);
+				$$.codigo = $3.codigo + "\t" + aux + "=" + $3.conteudo + ";\n";
+				$$.conteudo = aux;
+			}
+			;
+
 DECLARA		: TK_TIPO_INT TK_ID
 			{
-				string aux = criaCaracteristicas($2.codigo);
+				string aux = criaInstanciaTabela($2.codigo, string("int"));
 				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
 				$$.codigo = "";
 			}
+			|
+			TK_TIPO_FLOAT ATRI
+			{
+				table[$2.conteudo].tipo = string("float");
+				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + $2.conteudo + ";\n");
+				$$.codigo = $2.codigo;
+			}
 			| TK_TIPO_FLOAT TK_ID
 			{
-				string aux = criaCaracteristicas($2.codigo);
+				string aux = criaInstanciaTabela($2.codigo, string("float"));
 				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
 				$$.codigo = "";
 			}
 			| TK_TIPO_DOUBLE TK_ID
 			{
-				string aux = criaCaracteristicas($2.codigo);
+				string aux = criaInstanciaTabela($2.codigo, string("double"));
 				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
 				$$.codigo = "";
 			}
 			| TK_TIPO_BOOL TK_ID
 			{
-				string aux = criaCaracteristicas($2.codigo);
+				string aux = criaInstanciaTabela($2.codigo, string("bool"));
 				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
 				$$.codigo = "";
 			}
@@ -119,22 +134,55 @@ DECLARA		: TK_TIPO_INT TK_ID
 E 			: E '+' E
 			{
 				$$.conteudo = criaVariavelTemp();
-				$$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + "+" + $3.conteudo + ";\n";
+				string aux_erro;
+				if(verificaTiposEmOperacoes($1.conteudo,$3.conteudo,aux_erro))
+				{
+					criaInstanciaTabela($$.conteudo,table[$1.conteudo].tipo,false);
+					bufferDeclaracoes.push_back("\t" + table[$1.conteudo].tipo + " " + $$.conteudo + ";\n");
+					$$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + "+" + $3.conteudo + ";\n";
+				}
+				else
+					yyerror(aux_erro);
 			}
 			| E '*' E
 			{
 			    $$.conteudo = criaVariavelTemp();
-			    $$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + "*" + $3.conteudo + ";\n";
+				string aux_erro;
+				if(verificaTiposEmOperacoes($1.conteudo,$3.conteudo,aux_erro))
+				{
+					criaInstanciaTabela($$.conteudo,table[$1.conteudo].tipo,false);
+					bufferDeclaracoes.push_back("\t" + table[$1.conteudo].tipo + " " + $$.conteudo + ";\n");
+					$$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + "*" + $3.conteudo + ";\n";
+				}
+				else
+					yyerror(aux_erro);
 			}
 			| E '/' E
 			{
 			    $$.conteudo = criaVariavelTemp();
-			    $$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + "/" + $3.conteudo + ";\n";
+				string aux_erro;
+				if(verificaTiposEmOperacoes($1.conteudo,$3.conteudo,aux_erro))
+				{
+					criaInstanciaTabela($$.conteudo,table[$1.conteudo].tipo,false);
+					bufferDeclaracoes.push_back("\t" + table[$1.conteudo].tipo + " " + $$.conteudo + ";\n");
+					$$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + "/" + $3.conteudo + ";\n";
+				}
+				else
+					yyerror(aux_erro);
 			}
 			| E '-' E
 			{
 			    $$.conteudo = criaVariavelTemp();
-			    $$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + "-" + $3.conteudo + ";\n";
+				string aux_erro;
+				if(verificaTiposEmOperacoes($1.conteudo,$3.conteudo,aux_erro))
+				{
+					criaInstanciaTabela($$.conteudo,table[$1.conteudo].tipo,false);
+					bufferDeclaracoes.push_back("\t" + table[$1.conteudo].tipo + " " + $$.conteudo + ";\n");
+					$$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + "-" + $3.conteudo + ";\n";
+				}
+				else
+					yyerror(aux_erro);
+
 			}
 			| '(' E ')'
 			{
@@ -144,24 +192,21 @@ E 			: E '+' E
 			| TK_INT
 			{
 				$$.conteudo = criaVariavelTemp();
+				criaInstanciaTabela($$.conteudo,string("int"),false);
+				bufferDeclaracoes.push_back("\tint " + $$.conteudo + ";\n");
 				$$.codigo = "\t" + $$.conteudo + "=" + $1.codigo + ";\n";
 			}
 			| TK_FLOAT
 			{
 				$$.conteudo = criaVariavelTemp();
+				criaInstanciaTabela($$.conteudo,string("float"),false);
+				bufferDeclaracoes.push_back("\tfloat " + $$.conteudo + ";\n");
 				$$.codigo = "\t" + $$.conteudo + "=" + $1.codigo + ";\n";
 			}
 			| TK_ID
 			{
-				$$.conteudo = criaCaracteristicas($1.codigo);
+				$$.conteudo = criaInstanciaTabela($1.codigo);
 				$$.codigo = "";
-			}
-			;
-
-ATRI		: TK_ID '=' E
-			{
-				string aux = criaCaracteristicas($1.codigo);
-				$$.codigo = $3.codigo + "\t" + aux + "=" + $3.conteudo + ";\n";
 			}
 			;
 %%
@@ -169,7 +214,6 @@ ATRI		: TK_ID '=' E
 #include "lex.yy.c"
 
 int yyparse();
-
 
 int main( int argc, char* argv[] ) {
 	yyparse();
@@ -191,21 +235,34 @@ string criaVariavelTemp(void) {
 	return prefixoRetornar;
 }
 
-string criaCaracteristicas(string variavel, string tipo) {
+string criaInstanciaTabela(string variavel, string tipo, bool variavelUsuario) {
 	unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = table.find(variavel);
 
 	if ( linhaDaVariavel == table.end() ){
 		caracteristicas novaVariavel;
-		novaVariavel.temporaria = criaVariavelTemp();
+
+		if(variavelUsuario)
+			novaVariavel.temporaria = criaVariavelTemp();
+		else
+			novaVariavel.temporaria = variavel;
+
 		novaVariavel.tipo = tipo;
 		table[variavel] = novaVariavel;
+
 		return table[variavel].temporaria;
 	}
-	else {
+	else
 		return table[variavel].temporaria;
-	}
 
 	return "";
+}
+
+bool verificaTiposEmOperacoes(string variavelUm, string variavelDois,string& erro) {
+	if(table[variavelUm].tipo == table[variavelDois].tipo)
+		return true;
+
+	erro = string("Erro de tipo, realize coerção: foi tentado realizar uma operação com: "+ table[variavelUm].tipo + " e " + table[variavelDois].tipo);
+	return false;
 }
 
 void imprimeBufferDeclaracoes(void) {
@@ -214,16 +271,3 @@ void imprimeBufferDeclaracoes(void) {
 		cout << declaracao;
 	}
 }
-
-/*Ptrcarac instanciaCaracteristicas(void) {
-	Ptrcarac instancia = (Ptrcarac)malloc(sizeof(caracteristicas));
-
-	instancia->temporaria = criaVariavelTemp();
-	instancia->tipo = "";
-
-	return instancia;
-}
-
-int tamanhoCaracteristicas(void) {
-	return sizeof()
-}*/

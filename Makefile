@@ -4,6 +4,10 @@ SRC = ./src
 # compilador usado #
 CC = g++
 
+# nome dos arquivos utilizados #
+LEX = lexico.l
+SINT = sintatico.y
+
 # qual o nome do arquivo criado #
 MAIN = compilador
 
@@ -40,22 +44,19 @@ sintatico: $(SRC)/y.tab.c
 projeto: $(MAIN)
 	@echo "Fim da criação"
 
+limpar: clean
+	@echo "Arquivos desnecessarios retirados"
 
 # Cria os arquivos intermediarios #
-$(SRC)/lex.yy.c: $(SRC)/lexico.l
+$(SRC)/lex.yy.c: $(SRC)/$(LEX)
 	@lex -o $@ $<
 
-$(SRC)/y.tab.c: $(SRC)/sintatico.y
+$(SRC)/y.tab.c: $(SRC)/$(SINT)
 	@yacc -d -o $@ $<
 
 # compila tudo e cria o compilador #
 $(MAIN): $(SRC)/y.tab.c $(SRC)/lex.yy.c
 	@$(CC) -o $(MAIN) $< $(FLAGS) $(LIBS)
-
-
-limpar: clean
-	@echo "Arquivos desnecessarios retirados"
-
 
 # executa o programa #
 run:
