@@ -24,15 +24,16 @@ DI ,|;
 
 "main"           {return TK_MAIN;}
 
-"int"            { yylval.codigo = yytext; return TK_TIPO_INT;}
-"float"          { yylval.codigo = yytext; return TK_TIPO_FLOAT;}
-"double"         { yylval.codigo = yytext; return TK_TIPO_DOUBLE;}
-"bool"           { yylval.codigo = yytext; return TK_TIPO_BOOL;}
+"int"            { yylval.codigo = yytext; yylval.tipo = "int"; return TK_TIPO_INT;}
+"float"          { yylval.codigo = yytext; yylval.tipo = "float"; return TK_TIPO_FLOAT;}
+"double"         { yylval.codigo = yytext; yylval.tipo = "double"; return TK_TIPO_DOUBLE;}
+"bool"           { yylval.codigo = yytext; yylval.tipo = "bool"; return TK_TIPO_BOOL;}
 
 [+\-*/=]         { return *yytext; }
 
-{INT}            { yylval.codigo = yytext; return TK_INT; }
-{FLOAT}          { yylval.codigo = yytext; return TK_FLOAT; }
+{INT}            { yylval.codigo = yytext; yylval.tipo = "int"; return TK_INT; }
+{FLOAT}          { yylval.codigo = yytext; yylval.tipo = "float"; return TK_FLOAT; }
+{BOOL}           { yylval.codigo = yytext; yylval.tipo = "bool"; return TK_BOOL; }
 {ID}             { yylval.codigo = yytext; return TK_ID; }
 
 [(){}[\];,]	     { return *yytext; }
