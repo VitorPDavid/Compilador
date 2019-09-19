@@ -28,6 +28,8 @@ unordered_map<string, caracteristicas> table;
 
 vector<string> bufferDeclaracoes;
 
+int count = 0;
+
 int yylex(void);
 void yyerror(string);
 string criaVariavelTemp(void);
@@ -234,7 +236,7 @@ E 			: E '+' E
 			}
 			| E '*' E
 			{
-			    $$.conteudo = criaVariavelTemp();
+				$$.conteudo = criaVariavelTemp();
 
 				if($1.tipo == $3.tipo)
 				{
@@ -347,6 +349,11 @@ E 			: E '+' E
 			{
 				$$.conteudo = criaInstanciaTabela($1.codigo);
 				$$.codigo = "";
+				/*if(table[$$.conteudo].tipo == "")
+				{
+					yyerror("Variavel não declarada");
+				}*/
+				$$.tipo = table[$1.codigo].tipo;
 			}
 			;
 %%
@@ -412,18 +419,18 @@ void imprimeBuffers(void) {
 string regraCoercao(string tipoUm, string tipoDois, string operador) {
 	if(operador == string("+") || operador == string("-") || operador == string("/") || operador == string("*"))
 	{
-		if(tipoUm == string("double") || tipoDois == string("double"))
+		if(tipoUm == string("bool") || tipoDois == string("bool"))
+		{
+			yyerror(string("operadores: soma, subtração, divisão e multiplicação não aceitam tipo booleano"));
+			return string("erro");
+		}
+		else if(tipoUm == string("double") || tipoDois == string("double"))
 		{
 			return string("double");
 		}
 		else if(tipoUm == string("float") || tipoDois == string("float"))
 		{
 			return string("float");
-		}
-		else if(tipoUm == string("bool") || tipoDois == string("bool"))
-		{
-			yyerror(string("operador soma não aceita tipo booleano"));
-			return string("erro");
 		}
 	}
 	if(operador == "=")
