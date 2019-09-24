@@ -11,25 +11,27 @@ OCTAL 0[0-7]+
 HEX 0x[0-9A-Fa-f]+
 FLOAT {DIG}\.{DIG}+|{INT}\.{DIG}+
 EXP {FLOAT}E{INT}|{INT}E{INT}
-BOOL True|False
+BOOL "true"|"false"
 OP '+'|'-'|'*'|'/'
 ATR "+="|"-="|"*="|"/="|"="|"**="
+REL ">"|"<"|"=="|"!="|"<="|">="
 PARA "("|")"|"{"|"}"
 DI ,|;
 
 %%
-"\n"             {}
+"\n"             { numeroLinhas++; }
 [ ]+             {}
 [\t]+            {}
 
-"main"           {return TK_MAIN;}
+"int"            { yylval.codigo = yytext; yylval.tipo = "t_int"; return TK_TIPO_INT;}
+"float"          { yylval.codigo = yytext; yylval.tipo = "t_float"; return TK_TIPO_FLOAT;}
+"double"         { yylval.codigo = yytext; yylval.tipo = "t_double"; return TK_TIPO_DOUBLE;}
+"bool"           { yylval.codigo = yytext; yylval.tipo = "t_bool"; return TK_TIPO_BOOL;}
 
-"int"            { yylval.codigo = yytext; yylval.tipo = "int"; return TK_TIPO_INT;}
-"float"          { yylval.codigo = yytext; yylval.tipo = "float"; return TK_TIPO_FLOAT;}
-"double"         { yylval.codigo = yytext; yylval.tipo = "double"; return TK_TIPO_DOUBLE;}
-"bool"           { yylval.codigo = yytext; yylval.tipo = "bool"; return TK_TIPO_BOOL;}
+"if"             { yylval.codigo = yytext; yylval.tipo = ""; return TK_TIPO_IF; }
 
 [+\-*/=]         { return *yytext; }
+{REL}            { yylval.codigo = yytext; yylval.tipo = "rel"; return TK_REL; }
 
 {INT}            { yylval.codigo = yytext; yylval.tipo = "int"; return TK_INT; }
 {FLOAT}          { yylval.codigo = yytext; yylval.tipo = "float"; return TK_FLOAT; }
