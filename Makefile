@@ -12,10 +12,10 @@ SINT = sintatico.y
 MAIN = compilador
 
 # o arquivo de entrada #
-ENT = teste.txt
+ENT = teste.ks
 
 # arquivo de saida #
-SAIDA = saida.ks
+SAIDA = saida.cpp
 
 # Flasg de compilação #
 FLAGS = -O3 #-Wall

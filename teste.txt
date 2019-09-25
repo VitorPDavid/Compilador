@@ -1,2 +1,0 @@
-bool teste;
-teste = 10 < 5;

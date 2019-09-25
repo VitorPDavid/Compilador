@@ -1,6 +1,6 @@
 %{
   #include <string>
-
+  //{REL}            { yylval.codigo = yytext; yylval.tipo = "rel"; return TK_REL; }
 %}
 
 ALPHANUM [0-1a-zA-Z]
@@ -12,7 +12,8 @@ HEX 0x[0-9A-Fa-f]+
 FLOAT {DIG}\.{DIG}+|{INT}\.{DIG}+
 EXP {FLOAT}E{INT}|{INT}E{INT}
 BOOL "true"|"false"
-OP '+'|'-'|'*'|'/'
+OP_MA_P '*'|'/'|'%'
+OP_M_P '+'|'-'
 ATR "+="|"-="|"*="|"/="|"="|"**="
 REL ">"|"<"|"=="|"!="|"<="|">="
 PARA "("|")"|"{"|"}"
@@ -26,7 +27,7 @@ DI ,|;
 "int"            { yylval.codigo = yytext; yylval.tipo = "t_int"; return TK_TIPO_INT;}
 "float"          { yylval.codigo = yytext; yylval.tipo = "t_float"; return TK_TIPO_FLOAT;}
 "double"         { yylval.codigo = yytext; yylval.tipo = "t_double"; return TK_TIPO_DOUBLE;}
-"bool"           { yylval.codigo = yytext; yylval.tipo = "t_bool"; return TK_TIPO_BOOL;}
+"bool"           { yylval.codigo = "int"; yylval.tipo = "t_bool"; return TK_TIPO_BOOL;}
 
 "if"             { yylval.codigo = yytext; yylval.tipo = ""; return TK_TIPO_IF; }
 

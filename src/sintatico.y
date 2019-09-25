@@ -17,6 +17,8 @@ struct atributos
 	string tipo;
 };
 
+typedef struct atributos atributos;
+
 int ProxVariavelTemp = 0;
 
 typedef struct{
@@ -34,9 +36,16 @@ int yylex(void);
 void yyerror(string);
 string criaVariavelTemp(void);
 string criaInstanciaTabela(string, string = "");
+string verificaExistencia(string );
 bool verificaTiposEmOperacoes(string,string,string&);
 void imprimeBuffers(void);
 string regraCoercao(string, string, string);
+atributos geraCodigoOperacoes(atributos, atributos, string );
+atributos geraCodigoCoercaoExplicita(atributos , string );
+atributos geraCodigoRelacional(atributos, atributos, string );
+atributos geraCodigoDeclaComExp(atributos, atributos, string);
+atributos geraCodigoValores(atributos);
+atributos geraCodigoAtribuicao(atributos, atributos);
 
 %}
 
@@ -49,15 +58,17 @@ string regraCoercao(string, string, string);
 
 %start S
 
+%left TK_REL
 %left '+' '-'
 %left '*' '/'
 %left '(' ')'
+
 
 %%
 
 S 			: COMANDOS
 			{
-				cout << "/*Compilador Kek*/\n#include <iostream>\n#include <string.h>\n#include <stdio.h>\n#define TRUE 1\n#define FALSE 0\nint main(void)\n{\n";
+				cout << "/*Compilador Kek*/\n#include <iostream>\n#include <string.h>\n#include <stdio.h>\n#define true 1\n#define false 0\nint main(void)\n{\n";
 				imprimeBuffers();
 				cout << $1.codigo << "\treturn 0;\n}" << endl;
 			}
@@ -103,249 +114,63 @@ COMANDO 	: E ';'
 
 ATRI		: TK_ID '=' E
 			{
-				string aux = criaInstanciaTabela($1.codigo);
-				string tipoAux = table[$1.codigo].tipo;
-				
-				if($3.tipo == tipoAux)
-				{
-					$$.codigo = $3.codigo + "\t" + aux + "=" + $3.conteudo + ";\n";
-					$$.conteudo = aux;
-					$$.tipo = "ope";
-				}
-				else
-				{
-					string tempTipo = regraCoercao(tipoAux,$3.tipo,"=");
-					$$.codigo = $3.codigo + "\t" + aux + "=(" + tempTipo + ")" + $3.conteudo + ";\n";
-					$$.conteudo = aux;
-					$$.tipo = "ope";
-				}
+				$$ = geraCodigoAtribuicao($1,$3);
 			}
 			;
 
 DECLARA		: TK_TIPO_INT TK_ID
 			{
-				string aux = criaInstanciaTabela($2.codigo, string("int"));
-				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
+				criaInstanciaTabela($2.codigo, "int");
 				$$.codigo = "";
 			}
 			| TK_TIPO_INT TK_ID '=' E
 			{
-				string aux = criaInstanciaTabela($2.codigo, string("int"));
-				$2.tipo = "int";
-				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
-				if($2.tipo == $4.tipo)
-				{
-					$$.tipo = $2.tipo;
-					$$.codigo = $4.codigo + "\t" + aux + "=" + $4.conteudo + ";\n";
-				}
-				else
-				{
-					$$.tipo = regraCoercao($2.tipo,$4.tipo,string("="));
-					$$.codigo = $4.codigo + "\t" + aux + "=(" + $$.tipo + ")" + $4.conteudo + ";\n";
-				}
+				$$ = geraCodigoDeclaComExp($2,$4,"int");
 			}
 			| TK_TIPO_FLOAT TK_ID
 			{
-				string aux = criaInstanciaTabela($2.codigo, string("float"));
-				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
+				criaInstanciaTabela($2.codigo, "float");
 				$$.codigo = "";
 			}
 			| TK_TIPO_FLOAT TK_ID '=' E
 			{
-				string aux = criaInstanciaTabela($2.codigo, string("float"));
-				$2.tipo = "float";
-				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
-				if($2.tipo == $4.tipo)
-				{
-					$$.tipo = $2.tipo;
-					$$.codigo = $4.codigo + "\t" + aux + "=" + $4.conteudo + ";\n";
-				}
-				else
-				{
-					$$.tipo = regraCoercao($2.tipo,$4.tipo,string("="));
-					$$.codigo = $4.codigo + "\t" + aux + "=(" + $$.tipo + ")" + $4.conteudo + ";\n";
-				}
+				$$ = geraCodigoDeclaComExp($2,$4,"float");
 			}
 			| TK_TIPO_DOUBLE TK_ID
 			{
-				string aux = criaInstanciaTabela($2.codigo, string("double"));
-				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
+				criaInstanciaTabela($2.codigo, "double");
 				$$.codigo = "";
 			}
 			| TK_TIPO_DOUBLE TK_ID '=' E
 			{
-				string aux = criaInstanciaTabela($2.codigo, "double");
-				$2.tipo = "double";
-				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
-				if($2.tipo == $4.tipo)
-				{
-					$$.tipo = $2.tipo;
-					$$.codigo = $4.codigo + "\t" + aux + "=" + $4.conteudo + ";\n";
-				}
-				else
-				{
-					$$.tipo = regraCoercao($2.tipo,$4.tipo,string("="));
-					$$.codigo = $4.codigo + "\t" + aux + "=(" + $$.tipo + ")" + $4.conteudo + ";\n";
-				}
+				$$ = geraCodigoDeclaComExp($2,$4,"double");
 			}
 			| TK_TIPO_BOOL TK_ID
 			{
-				string aux = criaInstanciaTabela($2.codigo, string("bool"));
-				bufferDeclaracoes.push_back("\tint " + aux + ";\n");
+				criaInstanciaTabela($2.codigo, "float");
 				$$.codigo = "";
 			}
 			| TK_TIPO_BOOL TK_ID '=' E
 			{
-				//MUDAR AQUI PARA FICAR CERTO O BOOLEAN
-				string aux = criaInstanciaTabela($2.codigo, "bool");
-				$2.tipo = "bool";
-				bufferDeclaracoes.push_back("\t" + $1.codigo + " " + aux + ";\n");
-				if($2.tipo == $4.tipo)
-				{
-					$$.tipo = $2.tipo;
-					$$.codigo = $4.codigo + "\t" + aux + "=" + $4.conteudo + ";\n";
-				}
-				else
-				{
-					$$.tipo = regraCoercao($2.tipo,$4.tipo,string("="));
-					$$.codigo = $4.codigo + "\t" + aux + "=(" + $$.tipo + ")" + $4.conteudo + ";\n";
-				}
+				$$ = geraCodigoDeclaComExp($2,$4,"bool");
 			}
 			;
 
 E 			: E '+' E
 			{
-				$$.conteudo = criaVariavelTemp();
-
-				if($1.tipo == "bool" || $3.tipo == "bool")
-					yyerror("operação de soma não permitida entre bools");
-
-				if($1.tipo == $3.tipo)
-				{
-					$$.tipo = $1.tipo;
-					bufferDeclaracoes.push_back("\t" + $$.tipo + " " + $$.conteudo + ";\n");
-					$$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + "+" + $3.conteudo + ";\n";
-				}
-				else
-				{
-					string tipo = regraCoercao($1.tipo,$3.tipo,string("+"));
-					string variavelCoercao = criaVariavelTemp();
-					string codigoCoercao;
-					$$.tipo = tipo;
-					bufferDeclaracoes.push_back("\t" + tipo + " " + $$.conteudo + ";\n");
-					bufferDeclaracoes.push_back("\t" + tipo + " " + variavelCoercao + ";\n");
-					if($1.tipo != tipo)
-					{
-						codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + $1.conteudo + ";\n";
-						$$.codigo = $1.codigo + $3.codigo + codigoCoercao + "\t" + $$.conteudo + "=" + variavelCoercao + "+" + $3.conteudo + ";\n";
-					}
-					else if($3.tipo != tipo)
-					{
-						codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + $3.conteudo + ";\n";
-						$$.codigo = $1.codigo + $3.codigo + codigoCoercao +"\t" + $$.conteudo + "=" + $1.conteudo + "+" + variavelCoercao + ";\n";
-					}
-				}
-
+				$$ = geraCodigoOperacoes($1,$3,"+");
 			}
 			| E '*' E
 			{
-				$$.conteudo = criaVariavelTemp();
-
-				if($1.tipo == "bool" || $3.tipo == "bool")
-					yyerror("operação de multiplicação não permitida entre bools");
-
-				if($1.tipo == $3.tipo)
-				{
-					$$.tipo = $1.tipo;
-					bufferDeclaracoes.push_back("\t" + $$.tipo + " " + $$.conteudo + ";\n");
-					$$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + "*" + $3.conteudo + ";\n";
-				}
-				else
-				{
-					string tipo = regraCoercao($1.tipo,$3.tipo,string("*"));
-					string variavelCoercao = criaVariavelTemp();
-					string codigoCoercao;
-					$$.tipo = tipo;
-					bufferDeclaracoes.push_back("\t" + tipo + " " + $$.conteudo + ";\n");
-					bufferDeclaracoes.push_back("\t" + tipo + " " + variavelCoercao + ";\n");
-					if($1.tipo != tipo)
-					{
-						codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + $1.conteudo + ";\n";
-						$$.codigo = $1.codigo + $3.codigo + codigoCoercao + "\t" + $$.conteudo + "=" + variavelCoercao + "*" + $3.conteudo + ";\n";
-					}
-					else if($3.tipo != tipo)
-					{
-						codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + $3.conteudo + ";\n";
-						$$.codigo = $1.codigo + $3.codigo + codigoCoercao +"\t" + $$.conteudo + "=" + $1.conteudo + "*" + variavelCoercao + ";\n";
-					}
-				}
+				$$ = geraCodigoOperacoes($1,$3,"*");
 			}
 			| E '/' E
 			{
-			    $$.conteudo = criaVariavelTemp();
-
-				if($1.tipo == "bool" || $3.tipo == "bool")
-					yyerror("operação de divisão não permitida entre bools");
-
-				if($1.tipo == $3.tipo)
-				{
-					$$.tipo = $1.tipo;
-					bufferDeclaracoes.push_back("\t" + $$.tipo + " " + $$.conteudo + ";\n");
-					$$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + "/" + $3.conteudo + ";\n";
-				}
-				else
-				{
-					string tipo = regraCoercao($1.tipo,$3.tipo,string("/"));
-					string variavelCoercao = criaVariavelTemp();
-					string codigoCoercao;
-					$$.tipo = tipo;
-					bufferDeclaracoes.push_back("\t" + tipo + " " + $$.conteudo + ";\n");
-					bufferDeclaracoes.push_back("\t" + tipo + " " + variavelCoercao + ";\n");
-					if($1.tipo != tipo)
-					{
-						codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + $1.conteudo + ";\n";
-						$$.codigo = $1.codigo + $3.codigo + codigoCoercao + "\t" + $$.conteudo + "=" + variavelCoercao + "/" + $3.conteudo + ";\n";
-					}
-					else if($3.tipo != tipo)
-					{
-						codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + $3.conteudo + ";\n";
-						$$.codigo = $1.codigo + $3.codigo + codigoCoercao +"\t" + $$.conteudo + "=" + $1.conteudo + "/" + variavelCoercao + ";\n";
-					}
-				}
+			    $$ = geraCodigoOperacoes($1,$3,"/");
 			}
 			| E '-' E
 			{
-			    $$.conteudo = criaVariavelTemp();
-
-				if($1.tipo == "bool" || $3.tipo == "bool")
-					yyerror("operação de subtração não permitida entre bools");
-
-				if($1.tipo == $3.tipo)
-				{
-					$$.tipo = $1.tipo;
-					bufferDeclaracoes.push_back("\t" + $$.tipo + " " + $$.conteudo + ";\n");
-					$$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + "-" + $3.conteudo + ";\n";
-				}
-				else
-				{
-					string tipo = regraCoercao($1.tipo,$3.tipo,string("-"));
-					string variavelCoercao = criaVariavelTemp();
-					string codigoCoercao;
-					$$.tipo = tipo;
-					bufferDeclaracoes.push_back("\t" + tipo + " " + $$.conteudo + ";\n");
-					bufferDeclaracoes.push_back("\t" + tipo + " " + variavelCoercao + ";\n");
-					if($1.tipo != tipo)
-					{
-						codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + $1.conteudo + ";\n";
-						$$.codigo = $1.codigo + $3.codigo + codigoCoercao + "\t" + $$.conteudo + "=" + variavelCoercao + "-" + $3.conteudo + ";\n";
-					}
-					else if($3.tipo != tipo)
-					{
-						codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + $3.conteudo + ";\n";
-						$$.codigo = $1.codigo + $3.codigo + codigoCoercao +"\t" + $$.conteudo + "=" + $1.conteudo + "-" + variavelCoercao + ";\n";
-					}
-				}
-
+			    $$ = geraCodigoOperacoes($1,$3,"-");
 			}
 			| '(' E ')'
 			{
@@ -355,103 +180,41 @@ E 			: E '+' E
 			}
 			| '(' TK_TIPO_INT ')' E
 			{
-				$$.conteudo = criaVariavelTemp();
-				$$.tipo = "int";
-				bufferDeclaracoes.push_back("\t" + $$.tipo + " " + $$.conteudo + ";\n");
-				$$.codigo = $4.codigo + "\t" + $$.conteudo + "=(" + $$.tipo + ")" + $4.conteudo + ";\n";
+				$$ = geraCodigoCoercaoExplicita($4,"int");
 			}
 			| '(' TK_TIPO_FLOAT ')' E
 			{
-				$$.conteudo = criaVariavelTemp();
-				$$.tipo = "float";
-				bufferDeclaracoes.push_back("\t" + $$.tipo + " " + $$.conteudo + ";\n");
-				$$.codigo = $4.codigo + "\t" + $$.conteudo + "=(" + $$.tipo + ")" + $4.conteudo + ";\n";
+				$$ = geraCodigoCoercaoExplicita($4,"float");
 			}
 			| '(' TK_TIPO_DOUBLE ')' E
 			{
-				$$.conteudo = criaVariavelTemp();
-				$$.tipo = "double";
-				bufferDeclaracoes.push_back("\t" + $$.tipo + " " + $$.conteudo + ";\n");
-				$$.codigo = $4.codigo + "\t" + $$.conteudo + "=(" + $$.tipo + ")" + $4.conteudo + ";\n";
+				$$ = geraCodigoCoercaoExplicita($4,"double");
 			}
 			| '(' TK_TIPO_BOOL ')' E
 			{
-				$$.conteudo = criaVariavelTemp();
-				$$.tipo = "int";
-				bufferDeclaracoes.push_back("\tint " + $$.conteudo + ";\n");
-				//MUDAR AQUI PARA FICAR CERTO O BOOLEAN
-				$$.codigo = $4.codigo + "\t" + $$.conteudo + "=(" + $$.tipo + ")" + $4.conteudo + ";\n";
+				$$ = geraCodigoCoercaoExplicita($4,"bool");
 			}
 			| TK_BOOL
 			{
-				$$.conteudo = criaVariavelTemp();
-				$$.tipo = $1.tipo;
-				
-				if($1.codigo == "true")
-					$1.codigo = "TRUE";
-				else
-					$1.codigo = "FALSE";
-				
-				bufferDeclaracoes.push_back("\tint " + $$.conteudo + ";\n");
-				$$.codigo = "\t" + $$.conteudo + "=" + $1.codigo + ";\n";
+				$$ = geraCodigoValores($1);
 			}
 			| TK_INT
 			{
-				$$.conteudo = criaVariavelTemp();
-				$$.tipo = $1.tipo;
-				bufferDeclaracoes.push_back("\t" + $$.tipo + " " + $$.conteudo + ";\n");
-				$$.codigo = "\t" + $$.conteudo + "=" + $1.codigo + ";\n";
+				$$ = geraCodigoValores($1);
 			}
 			| TK_FLOAT
 			{
-				$$.conteudo = criaVariavelTemp();
-				$$.tipo = $1.tipo;
-				bufferDeclaracoes.push_back("\t" + $$.tipo + " " + $$.conteudo + ";\n");
-				$$.codigo = "\t" + $$.conteudo + "=" + $1.codigo + ";\n";
+				$$ = geraCodigoValores($1);
 			}
 			| TK_ID
 			{
-				$$.conteudo = criaInstanciaTabela($1.codigo);
-				$$.codigo = "";
-				if(table[$1.codigo].tipo == "")
-				{
-					yyerror("Variavel \"" + $1.codigo + "\" não declarada");
-				}
+				$$.conteudo = verificaExistencia($1.codigo);
 				$$.tipo = table[$1.codigo].tipo;
+				$$.codigo = "";
 			}
 			| E TK_REL E
 			{
-				if($1.tipo == "bool" || $3.tipo == "bool")
-					yyerror(string("operação \"") + to_string(TK_REL) + string("\" não permitida com o tipo bool"));
-
-				$$.conteudo = criaVariavelTemp();
-				$$.tipo = "bool";
-
-				bufferDeclaracoes.push_back("\tint " + $$.conteudo + ";\n");
-
-				if($1.tipo == $3.tipo)
-				{	
-					$$.codigo = $1.codigo + $3.codigo + "\t" + $$.conteudo + "=" + $1.conteudo + $2.codigo + $3.conteudo + ";\n";
-				}
-				else
-				{
-					string tipo = regraCoercao($1.tipo, $3.tipo, $2.codigo);
-					string variavelCoercao = criaVariavelTemp();
-					string codigoCoercao;
-
-					bufferDeclaracoes.push_back("\t" + tipo + " " + variavelCoercao + ";\n");
-
-					if($1.tipo != tipo)
-					{
-						codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + $1.conteudo + ";\n";
-						$$.codigo = $1.codigo + $3.codigo + codigoCoercao + "\t" + $$.conteudo + "=" + variavelCoercao + $2.codigo + $3.conteudo + ";\n";
-					}
-					else if($3.tipo != tipo)
-					{
-						codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + $3.conteudo + ";\n";
-						$$.codigo = $1.codigo + $3.codigo + codigoCoercao +"\t" + $$.conteudo + "=" + $1.conteudo + $2.codigo + variavelCoercao + ";\n";
-					}
-				}
+				$$ = geraCodigoRelacional($1,$3,$2.codigo);
 			}
 			;
 %%
@@ -480,6 +243,18 @@ string criaVariavelTemp(void) {
 	return prefixoRetornar;
 }
 
+string verificaExistencia(string variavel){
+	unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = table.find(variavel);
+
+	if ( linhaDaVariavel == table.end() ){
+		yyerror("Variavel \""+ variavel +"\" não declarada");
+	}
+	else {
+		return table[variavel].temporaria;
+	}
+	return "";
+}
+
 string criaInstanciaTabela(string variavel, string tipo) {
 	unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = table.find(variavel);
 
@@ -491,11 +266,16 @@ string criaInstanciaTabela(string variavel, string tipo) {
 		novaVariavel.tipo = tipo;
 		table[variavel] = novaVariavel;
 
+		if(tipo == "bool")
+			bufferDeclaracoes.push_back("\tint " + table[variavel].temporaria + ";\n");
+		else
+			bufferDeclaracoes.push_back("\t" + tipo + " " + table[variavel].temporaria + ";\n");
+
 		return table[variavel].temporaria;
 	}
-	else
+	else {
 		return table[variavel].temporaria;
-
+	}
 	return "";
 }
 
@@ -538,7 +318,7 @@ string regraCoercao(string tipoUm, string tipoDois, string operador) {
 		{
 			yyerror(string("Não é aceito coerção automatica de ") + tipoDois + " para " + tipoUm);
 		}
-		else if(tipoUm == "int" && tipoDois!= "bool")
+		else if(tipoUm == "int" && tipoDois != "int")
 		{
 			yyerror(string("Não é aceito coerção automatica de ") + tipoDois + " para " + tipoUm);
 		}
@@ -567,4 +347,161 @@ string regraCoercao(string tipoUm, string tipoDois, string operador) {
 			return string("float");
 		}
 	}
+}
+
+atributos geraCodigoOperacoes(atributos elementoUm, atributos elementoDois, string operacao) {
+	atributos structRetorno;
+
+	structRetorno.conteudo = criaVariavelTemp();
+
+	if(elementoUm.tipo == "bool" || elementoDois.tipo == "bool")
+		yyerror("operação \"" + operacao + "\" não permitida entre bools");
+
+	if(elementoUm.tipo == elementoDois.tipo)
+	{
+		structRetorno.tipo = elementoUm.tipo;
+		bufferDeclaracoes.push_back("\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n");
+		structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + elementoDois.conteudo + ";\n";
+	}
+	else
+	{
+		string tipo = regraCoercao(elementoUm.tipo,elementoDois.tipo,string("+"));
+		string variavelCoercao = criaVariavelTemp();
+		string codigoCoercao;
+		structRetorno.tipo = tipo;
+		bufferDeclaracoes.push_back("\t" + tipo + " " + structRetorno.conteudo + ";\n");
+		bufferDeclaracoes.push_back("\t" + tipo + " " + variavelCoercao + ";\n");
+		if(elementoUm.tipo != tipo)
+		{
+			codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + elementoUm.conteudo + ";\n";
+			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao + "\t" + structRetorno.conteudo + "=" + variavelCoercao + operacao + elementoDois.conteudo + ";\n";
+		}
+		else if(elementoDois.tipo != tipo)
+		{
+			codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + elementoDois.conteudo + ";\n";
+			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao +"\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + variavelCoercao + ";\n";
+		}
+	}
+
+	return structRetorno;
+}
+
+atributos geraCodigoCoercaoExplicita(atributos elemento, string tipo) {
+	atributos structRetorno;
+	
+	structRetorno.conteudo = criaVariavelTemp();
+	structRetorno.tipo = tipo;
+
+	if(tipo == "bool")
+	{
+		bufferDeclaracoes.push_back("\tint" + structRetorno.conteudo + ";\n");
+		structRetorno.codigo = elemento.codigo + "\t" + structRetorno.conteudo + "=(int)" + elemento.conteudo + ";\n";
+	}
+	else
+	{
+		bufferDeclaracoes.push_back("\t" + tipo + " " + structRetorno.conteudo + ";\n");
+		structRetorno.codigo = elemento.codigo + "\t" + structRetorno.conteudo + "=(" + structRetorno.tipo + ")" + elemento.conteudo + ";\n";
+	}
+	return structRetorno;
+}
+
+atributos geraCodigoRelacional(atributos elementoUm, atributos elementoDois, string operacao) {
+	atributos structRetorno;
+
+	if(elementoUm.tipo == "bool" || elementoDois.tipo == "bool")
+		yyerror(string("operação \"") + operacao + ("\" não permitida com o tipo bool"));
+
+	structRetorno.conteudo = criaVariavelTemp();
+	structRetorno.tipo = "bool";
+
+	bufferDeclaracoes.push_back("\tint " + structRetorno.conteudo + ";\n");
+
+	if(elementoUm.tipo == elementoDois.tipo)
+	{	
+		structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + elementoDois.conteudo + ";\n";
+	}
+	else
+	{
+		string tipo = regraCoercao(elementoUm.tipo, elementoDois.tipo, operacao);
+		string variavelCoercao = criaVariavelTemp();
+		string codigoCoercao;
+
+		bufferDeclaracoes.push_back("\t" + tipo + " " + variavelCoercao + ";\n");
+
+		if(elementoUm.tipo != tipo)
+		{
+			codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + elementoUm.conteudo + ";\n";
+			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao + "\t" + structRetorno.conteudo + "=" + variavelCoercao + operacao + elementoDois.conteudo + ";\n";
+		}
+		else if(elementoDois.tipo != tipo)
+		{
+			codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + elementoDois.conteudo + ";\n";
+			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao +"\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + variavelCoercao + ";\n";
+		}
+	}
+
+	return structRetorno;
+}
+
+atributos geraCodigoDeclaComExp(atributos elementoUm, atributos elementoDois, string tipo) {
+	atributos structRetorno;
+
+	elementoUm.tipo = tipo;
+	
+	string aux = criaInstanciaTabela(elementoUm.codigo, tipo);
+	
+	if(elementoUm.tipo == elementoDois.tipo)
+	{
+		structRetorno.tipo = elementoUm.tipo;
+		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + elementoDois.conteudo + ";\n";
+	}
+	else
+	{
+		structRetorno.tipo = regraCoercao(elementoUm.tipo,elementoDois.tipo,"=");
+		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=(" + structRetorno.tipo + ")" + elementoDois.conteudo + ";\n";
+	}
+
+	return structRetorno;
+}
+
+atributos geraCodigoValores(atributos elemento) {
+	atributos structRetorno;
+
+	structRetorno.conteudo = criaVariavelTemp();
+	structRetorno.tipo = elemento.tipo;
+	if(structRetorno.tipo == "bool")
+	{
+		bufferDeclaracoes.push_back("\tint " + structRetorno.conteudo + ";\n");
+		structRetorno.codigo = "\t" + structRetorno.conteudo + "=" + elemento.codigo + ";\n";
+	}
+	else
+	{
+		bufferDeclaracoes.push_back("\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n");
+		structRetorno.codigo = "\t" + structRetorno.conteudo + "=" + elemento.codigo + ";\n";
+	}
+
+	return structRetorno;
+}
+
+atributos geraCodigoAtribuicao(atributos elementoUm, atributos elementoDois) {
+	atributos structRetorno;
+
+	string aux = verificaExistencia(elementoUm.codigo);
+	string tipoAux = table[elementoUm.codigo].tipo;
+	
+	if(elementoDois.tipo == tipoAux)
+	{
+		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + elementoDois.conteudo + ";\n";
+		structRetorno.conteudo = aux;
+		structRetorno.tipo = "ope";
+	}
+	else
+	{
+		string tempTipo = regraCoercao(tipoAux,elementoDois.tipo,"=");
+		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=(" + tempTipo + ")" + elementoDois.conteudo + ";\n";
+		structRetorno.conteudo = aux;
+		structRetorno.tipo = "ope";
+	}
+
+	return structRetorno;
 }
