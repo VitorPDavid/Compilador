@@ -8,6 +8,8 @@
 
 #define YYSTYPE atributos
 
+#define TESTE cout << "teste" << endl;
+
 using namespace std;
 
 struct atributos
@@ -20,24 +22,28 @@ struct atributos
 typedef struct atributos atributos;
 
 int ProxVariavelTemp = 0;
+int numeroLinhas = 1;
+int proxLabelFim = 0;
+int proxLabelInicio = 0;
+int proxLabel = 0;
 
 typedef struct{
 	string temporaria;
 	string tipo;
 } caracteristicas;
 
-unordered_map<string, caracteristicas> table;
-
 vector<string> bufferDeclaracoes;
 
-int numeroLinhas = 1;
+int mapAtual = 0;
+
+vector< unordered_map<string, caracteristicas> > pilhaMaps;
 
 int yylex(void);
 void yyerror(string);
 string criaVariavelTemp(void);
+string criaFlag(void);
 string criaInstanciaTabela(string, string = "");
-string verificaExistencia(string );
-bool verificaTiposEmOperacoes(string,string,string&);
+string verificaExistencia(string, int);
 void imprimeBuffers(void);
 string regraCoercao(string, string, string);
 atributos geraCodigoOperacoes(atributos, atributos, string );
@@ -46,12 +52,16 @@ atributos geraCodigoRelacional(atributos, atributos, string );
 atributos geraCodigoDeclaComExp(atributos, atributos, string);
 atributos geraCodigoValores(atributos);
 atributos geraCodigoAtribuicao(atributos, atributos);
+atributos geraCodigoIf(atributos, atributos);
+atributos geraCodigoElse(atributos, atributos);
+void retiraDoMap(void);
+string pegaTipo(string, int);
 
 %}
 
 %token TK_INT TK_FLOAT TK_EXP TK_OCTAL TK_HEX TK_BOOL
 %token TK_TIPO_INT TK_TIPO_BOOL TK_TIPO_DOUBLE TK_TIPO_FLOAT
-%token TK_TIPO_IF
+%token TK_IF TK_ELSE
 %token TK_ID TK_REL
 %token TK_FIM_LINHA TK_ESPACE TK_TABULACAO
 %token TK_FIM TK_ERROR
@@ -66,27 +76,57 @@ atributos geraCodigoAtribuicao(atributos, atributos);
 
 %%
 
-S 			: COMANDOS
+S 			: AUX_S COMANDOS
 			{
 				cout << "/*Compilador Kek*/\n#include <iostream>\n#include <string.h>\n#include <stdio.h>\n#define true 1\n#define false 0\nint main(void)\n{\n";
 				imprimeBuffers();
-				cout << $1.codigo << "\treturn 0;\n}" << endl;
+				cout << $2.codigo << "\treturn 0;\n}" << endl;
 			}
 			;
-
-
-/*
-BLOCO		: '{' COMANDOS '}'
+AUX_S       :
 			{
-				$$.codigo = $2.codigo;
+				unordered_map<string, caracteristicas> auxMapGlobal;
+				pilhaMaps.push_back(auxMapGlobal);
+				$$.codigo = "";
 			}
 			;
-CONDI		: TK_IF BLOCO
-			{
 
+BLOCO		: AUX_BLOCO '{' COMANDOS '}'
+			{
+				$$.codigo = $3.codigo;
 			}
 			;
-*/
+
+AUX_BLOCO   : 
+			{
+				unordered_map<string, caracteristicas> auxMapGlobal;
+				pilhaMaps.push_back(auxMapGlobal);
+				mapAtual++;
+				
+				$$.codigo = "";
+			}
+
+CONDI_IF	: TK_IF '(' E ')' BLOCO
+			{
+				$$ = geraCodigoIf($3,$5);
+				retiraDoMap();
+			}
+			| TK_IF '(' E ')' COMANDO
+			{
+				$$ = geraCodigoIf($3,$5);
+			} 
+			;
+
+CONDI_ELSE  : CONDI_IF TK_ELSE BLOCO
+			{
+				$$ = geraCodigoElse($1, $3);
+				retiraDoMap();
+			}
+			| CONDI_IF TK_ELSE COMANDO
+			{
+				$$ = geraCodigoElse($1, $3);
+			}
+			;
 
 COMANDOS	: COMANDO COMANDOS
 			{
@@ -109,6 +149,14 @@ COMANDO 	: E ';'
 			| DECLARA ';'
 			{
 			    $$ = $1;
+			}
+			| CONDI_IF
+			{
+				$$ = $1;
+			}
+			| CONDI_ELSE
+			{
+				$$ = $1;
 			}
 			;
 
@@ -174,9 +222,7 @@ E 			: E '+' E
 			}
 			| '(' E ')'
 			{
-				$$.conteudo = $2.conteudo;
-				$$.codigo = $2.codigo;
-				$$.tipo = $2.tipo;
+				$$ = $2;
 			}
 			| '(' TK_TIPO_INT ')' E
 			{
@@ -208,8 +254,8 @@ E 			: E '+' E
 			}
 			| TK_ID
 			{
-				$$.conteudo = verificaExistencia($1.codigo);
-				$$.tipo = table[$1.codigo].tipo;
+				$$.conteudo = verificaExistencia($1.codigo, mapAtual);
+				$$.tipo = pegaTipo($1.codigo, mapAtual);
 				$$.codigo = "";
 			}
 			| E TK_REL E
@@ -243,48 +289,82 @@ string criaVariavelTemp(void) {
 	return prefixoRetornar;
 }
 
-string verificaExistencia(string variavel){
-	unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = table.find(variavel);
+string criaFlagInicio(void) {
+	string prefixoRetornar = "INICIO";
+	int sufixoRetornar = proxLabelInicio++;
 
-	if ( linhaDaVariavel == table.end() ){
-		yyerror("Variavel \""+ variavel +"\" não declarada");
+	prefixoRetornar += to_string(sufixoRetornar);
+
+	return prefixoRetornar;
+}
+
+string criaFlagFim(void) {
+	string prefixoRetornar = "FIM";
+	int sufixoRetornar = proxLabelFim++;
+
+	prefixoRetornar += to_string(sufixoRetornar);
+
+	return prefixoRetornar;
+}
+
+string criaFlag(void) {
+	string prefixoRetornar = "CONDI";
+	int sufixoRetornar = proxLabel++;
+
+	prefixoRetornar += to_string(sufixoRetornar);
+
+	return prefixoRetornar;
+}
+
+string verificaExistencia(string variavel, int mapBusca){
+	// unordered_map<string, caracteristicas> table = (pilhaMaps[mapBusca]);
+
+	if(mapBusca == 0) {
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+
+		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			yyerror("Variavel \""+ variavel +"\" não declarada");
+		} else {
+			return (pilhaMaps[mapBusca])[variavel].temporaria;
+		}
+		yyerror("Erro na função de verificação do ID");
+	} else {
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			return verificaExistencia(variavel, mapBusca - 1);
+		}
+		else {
+			return (pilhaMaps[mapBusca])[variavel].temporaria;
+		}
+		yyerror("Erro na função de verificação do ID");
 	}
-	else {
-		return table[variavel].temporaria;
-	}
-	return "";
+	yyerror("Erro na função de verificação do ID");
 }
 
 string criaInstanciaTabela(string variavel, string tipo) {
-	unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = table.find(variavel);
+	// unordered_map<string, caracteristicas> table = (pilhaMaps[mapAtual]);
 
-	if ( linhaDaVariavel == table.end() ){
+	unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps.back()).find(variavel);
+
+	if ( linhaDaVariavel == (pilhaMaps.back()).end() ){
 		caracteristicas novaVariavel;
 
 		novaVariavel.temporaria = criaVariavelTemp();
 
 		novaVariavel.tipo = tipo;
-		table[variavel] = novaVariavel;
+		(pilhaMaps.back())[variavel] = novaVariavel;
 
 		if(tipo == "bool")
-			bufferDeclaracoes.push_back("\tint " + table[variavel].temporaria + ";\n");
+			bufferDeclaracoes.push_back("\tint " + (pilhaMaps.back())[variavel].temporaria + ";\n");
 		else
-			bufferDeclaracoes.push_back("\t" + tipo + " " + table[variavel].temporaria + ";\n");
+			bufferDeclaracoes.push_back("\t" + tipo + " " + (pilhaMaps.back())[variavel].temporaria + ";\n");
 
-		return table[variavel].temporaria;
+		return (pilhaMaps.back())[variavel].temporaria;
 	}
 	else {
-		return table[variavel].temporaria;
+		return (pilhaMaps.back())[variavel].temporaria;
 	}
 	return "";
-}
-
-bool verificaTiposEmOperacoes(string variavelUm, string variavelDois,string& erro) {
-	if(table[variavelUm].tipo == table[variavelDois].tipo)
-		return true;
-
-	erro = string("Erro de tipo, realize coerção: foi tentado realizar uma operação com: "+ table[variavelUm].tipo + " e " + table[variavelDois].tipo);
-	return false;
 }
 
 void imprimeBuffers(void) {
@@ -292,6 +372,7 @@ void imprimeBuffers(void) {
 	{
 		cout << declaracao;
 	}
+	cout << "\n\n";
 }
 
 string regraCoercao(string tipoUm, string tipoDois, string operador) {
@@ -486,8 +567,9 @@ atributos geraCodigoValores(atributos elemento) {
 atributos geraCodigoAtribuicao(atributos elementoUm, atributos elementoDois) {
 	atributos structRetorno;
 
-	string aux = verificaExistencia(elementoUm.codigo);
-	string tipoAux = table[elementoUm.codigo].tipo;
+	string aux = verificaExistencia(elementoUm.codigo, mapAtual);
+	
+	string tipoAux = pegaTipo(elementoUm.codigo, mapAtual);
 	
 	if(elementoDois.tipo == tipoAux)
 	{
@@ -504,4 +586,74 @@ atributos geraCodigoAtribuicao(atributos elementoUm, atributos elementoDois) {
 	}
 
 	return structRetorno;
+}
+
+atributos geraCodigoIf(atributos exprecao, atributos bloco) {
+	atributos structRetorno;
+	
+	structRetorno.tipo = "condicional";
+
+	string auxCondicao = criaVariavelTemp();
+	
+	structRetorno.conteudo = auxCondicao;
+
+	bufferDeclaracoes.push_back("\tint " + auxCondicao + ";\n");
+
+	string auxFlag = criaFlag();
+
+	structRetorno.codigo = exprecao.codigo + "\t" + auxCondicao + "=(int)" + exprecao.conteudo + ";\n\t" + auxCondicao + "=!" + auxCondicao + ";\n";
+
+	structRetorno.codigo += "\tif(" + auxCondicao + ")\n\t  goto " + auxFlag + ";\n" + bloco.codigo + auxFlag + ":\n"; 
+
+	return structRetorno;
+}
+
+atributos geraCodigoElse(atributos atriIf, atributos bloco) {
+	atributos structRetorno;
+	
+	structRetorno.tipo = "condicional";
+	structRetorno.conteudo = "";
+
+	string auxCondicao = atriIf.conteudo;
+
+	string auxFlag = criaFlag();
+
+	int localCondi = atriIf.codigo.rfind("CONDI");
+
+	structRetorno.codigo = atriIf.codigo;
+
+	structRetorno.codigo.insert(localCondi, "\tgoto " + auxFlag + ";\n");
+
+	structRetorno.codigo += bloco.codigo + auxFlag + ":\n";
+
+	return structRetorno;
+}
+
+void retiraDoMap(void) {
+	pilhaMaps.pop_back();
+	mapAtual--;
+}
+
+string pegaTipo(string variavel, int mapBusca) {
+	if(mapBusca == 0) {
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+
+		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			yyerror("Variavel \""+ variavel +"\" não declarada");
+		} else {
+			return (pilhaMaps[mapBusca])[variavel].tipo;
+		}
+		yyerror("Erro na função de verificação do ID");
+	} else {
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+
+		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			return pegaTipo(variavel, mapBusca - 1);
+		}
+		else {
+			return (pilhaMaps[mapBusca])[variavel].tipo;
+		}
+		yyerror("Erro na função de verificação do ID");
+	}
+	yyerror("Erro na função de verificação do ID");
 }

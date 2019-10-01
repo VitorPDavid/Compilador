@@ -29,8 +29,8 @@ DI ,|;
 "double"         { yylval.codigo = yytext; yylval.tipo = "t_double"; return TK_TIPO_DOUBLE;}
 "bool"           { yylval.codigo = "int"; yylval.tipo = "t_bool"; return TK_TIPO_BOOL;}
 
-"if"             { yylval.codigo = yytext; yylval.tipo = ""; return TK_TIPO_IF; }
-
+"if"             { return TK_IF; }
+"else"           { return TK_ELSE; }
 [+\-*/=]         { return *yytext; }
 {REL}            { yylval.codigo = yytext; yylval.tipo = "rel"; return TK_REL; }
 
