@@ -30,6 +30,7 @@ int proxLabel = 0;
 typedef struct{
 	string temporaria;
 	string tipo;
+	bool atribuido;
 } caracteristicas;
 
 vector<string> bufferDeclaracoes;
@@ -56,18 +57,25 @@ atributos geraCodigoIf(atributos, atributos);
 atributos geraCodigoElse(atributos, atributos);
 void retiraDoMap(void);
 string pegaTipo(string, int);
+atributos geraCodigoLogico(atributos, atributos, string);
+atributos geraCodigoLogicoNot(atributos, string);
+void confirmaAtribuicao(string, int);
+atributos geraCodigoOutput(atributos);
+atributos geraCodigoInput(atributos);
 
 %}
 
 %token TK_INT TK_FLOAT TK_EXP TK_OCTAL TK_HEX TK_BOOL
 %token TK_TIPO_INT TK_TIPO_BOOL TK_TIPO_DOUBLE TK_TIPO_FLOAT
-%token TK_IF TK_ELSE
-%token TK_ID TK_REL
+%token TK_IF TK_ELSE TK_INPUT TK_OUTPUT
+%token TK_ID TK_REL TK_LOGI TK_NOT
 %token TK_FIM_LINHA TK_ESPACE TK_TABULACAO
 %token TK_FIM TK_ERROR
 
 %start S
 
+%left TK_LOGI
+%left TK_NOT
 %left TK_REL
 %left '+' '-'
 %left '*' '/'
@@ -158,11 +166,31 @@ COMANDO 	: E ';'
 			{
 				$$ = $1;
 			}
+			| INPUT ';'
+			{
+				$$ = $1;
+			}
+			| OUTPUT ';'
+			{
+				$$ = $1;
+			}
 			;
 
 ATRI		: TK_ID '=' E
 			{
 				$$ = geraCodigoAtribuicao($1,$3);
+			}
+			;
+
+INPUT		: TK_ID '=' TK_INPUT '(' ')'
+			{
+				$$ = geraCodigoInput($1);
+			}
+			;
+
+OUTPUT		: TK_OUTPUT '(' TK_ID ')'
+			{
+				$$ = geraCodigoOutput($3);
 			}
 			;
 
@@ -195,7 +223,7 @@ DECLARA		: TK_TIPO_INT TK_ID
 			}
 			| TK_TIPO_BOOL TK_ID
 			{
-				criaInstanciaTabela($2.codigo, "float");
+				criaInstanciaTabela($2.codigo, "bool");
 				$$.codigo = "";
 			}
 			| TK_TIPO_BOOL TK_ID '=' E
@@ -258,9 +286,17 @@ E 			: E '+' E
 				$$.tipo = pegaTipo($1.codigo, mapAtual);
 				$$.codigo = "";
 			}
+			| E TK_LOGI E
+			{
+				$$ = geraCodigoLogico($1, $3, $2.codigo);
+			}
+			| TK_NOT E
+			{
+				$$ = geraCodigoLogicoNot($2, $1.codigo);
+			}
 			| E TK_REL E
 			{
-				$$ = geraCodigoRelacional($1,$3,$2.codigo);
+				$$ = geraCodigoRelacional($1, $3, $2.codigo);	
 			}
 			;
 %%
@@ -352,6 +388,8 @@ string criaInstanciaTabela(string variavel, string tipo) {
 		novaVariavel.temporaria = criaVariavelTemp();
 
 		novaVariavel.tipo = tipo;
+		novaVariavel.atribuido = false;
+
 		(pilhaMaps.back())[variavel] = novaVariavel;
 
 		if(tipo == "bool")
@@ -426,6 +464,13 @@ string regraCoercao(string tipoUm, string tipoDois, string operador) {
 		{
 			//TODO Colocar warning aqui
 			return string("float");
+		}
+	}
+	if(operador == "or" || operador == "and" || operador == "not") {
+		if(tipoUm != "bool" || tipoDois != "bool"){
+			yyerror("operações logicas só podem ser feitas entre booleanos.");
+		} else {
+			return "bool";
 		}
 	}
 }
@@ -531,6 +576,8 @@ atributos geraCodigoDeclaComExp(atributos elementoUm, atributos elementoDois, st
 	
 	string aux = criaInstanciaTabela(elementoUm.codigo, tipo);
 	
+	// confirmaAtribuicao(elementoUm.codigo, mapAtual);
+
 	if(elementoUm.tipo == elementoDois.tipo)
 	{
 		structRetorno.tipo = elementoUm.tipo;
@@ -571,6 +618,8 @@ atributos geraCodigoAtribuicao(atributos elementoUm, atributos elementoDois) {
 	
 	string tipoAux = pegaTipo(elementoUm.codigo, mapAtual);
 	
+	// confirmaAtribuicao(elementoUm.codigo, mapAtual);
+
 	if(elementoDois.tipo == tipoAux)
 	{
 		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + elementoDois.conteudo + ";\n";
@@ -656,4 +705,76 @@ string pegaTipo(string variavel, int mapBusca) {
 		yyerror("Erro na função de verificação do ID");
 	}
 	yyerror("Erro na função de verificação do ID");
+}
+
+atributos geraCodigoLogico(atributos elementoUm, atributos elementoDois, string operacao) {
+	atributos structRetorno;
+
+	structRetorno.tipo = regraCoercao(elementoUm.tipo, elementoDois.tipo, operacao);
+	structRetorno.conteudo = criaVariavelTemp();
+
+	bufferDeclaracoes.push_back("\tint " + structRetorno.conteudo + ";\n");
+
+	if(operacao =="or")
+		structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + "||" + elementoDois.conteudo + ";\n";
+	else
+		structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + "&&" + elementoDois.conteudo + ";\n";
+	
+	return structRetorno;
+}
+
+atributos geraCodigoLogicoNot(atributos elemento, string operacao) {
+	atributos structRetorno;
+
+	structRetorno.tipo = regraCoercao(elemento.tipo, "bool", operacao);
+	structRetorno.conteudo = criaVariavelTemp();
+
+	bufferDeclaracoes.push_back("\tint " + structRetorno.conteudo + ";\n");
+
+	structRetorno.codigo = elemento.codigo + "\t" + structRetorno.conteudo + "=!" + elemento.conteudo + ";\n";
+	
+	return structRetorno;
+}
+
+void confirmaAtribuicao(string variavel, int mapBusca) {
+	if(mapBusca == 0) {
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+
+		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			yyerror("Variavel \""+ variavel +"\" não declarada");
+		} else {
+			(pilhaMaps[mapBusca])[variavel].atribuido = true;
+		}
+		yyerror("Erro na função de confirmar atribuição");
+	} else {
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			confirmaAtribuicao(variavel, mapBusca - 1);
+		}
+		else {
+			(pilhaMaps[mapBusca])[variavel].atribuido = true;
+		}
+		yyerror("Erro na função de confirmar atribuição");
+	}
+	yyerror("Erro na função de confirmar atribuição");
+}
+
+atributos geraCodigoInput(atributos variavel) {
+	atributos structRetorno;
+
+	structRetorno.tipo = "input";
+	structRetorno.conteudo = "";
+	structRetorno.codigo = "\tstd::cin >> " + verificaExistencia(variavel.codigo, mapAtual) + ";\n";
+
+	return structRetorno;
+}
+
+atributos geraCodigoOutput(atributos variavel) {
+	atributos structRetorno;
+
+	structRetorno.tipo = "output";
+	structRetorno.conteudo = "";
+	structRetorno.codigo = "\tstd::cout << " + verificaExistencia(variavel.codigo, mapAtual) + " << std::endl;\n";
+
+	return structRetorno;
 }

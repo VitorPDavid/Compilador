@@ -16,6 +16,7 @@ ENT = teste.ks
 
 # arquivo de saida #
 SAIDA = saida.cpp
+EXECSAIDA = saida
 
 # Flasg de compilação #
 FLAGS = -O3 #-Wall
@@ -62,8 +63,12 @@ $(MAIN): $(SRC)/y.tab.c $(SRC)/lex.yy.c
 run:
 	-@./$(MAIN) < $(ENT)
 
-run-saida:
+create-saida:
 	-@./$(MAIN) < $(ENT) > $(SAIDA)
+
+run-saida: $(SAIDA)
+	-@$(CC) -o $(EXECSAIDA) $(SAIDA) $(FLAGS)
+	-@./$(EXECSAIDA)
 
 clean:
 	@rm -rf $(SRC)/*.c

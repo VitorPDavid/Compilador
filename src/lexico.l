@@ -12,12 +12,14 @@ HEX 0x[0-9A-Fa-f]+
 FLOAT {DIG}\.{DIG}+|{INT}\.{DIG}+
 EXP {FLOAT}E{INT}|{INT}E{INT}
 BOOL "true"|"false"
+LOGI "or"|"and"
 OP_MA_P '*'|'/'|'%'
 OP_M_P '+'|'-'
 ATR "+="|"-="|"*="|"/="|"="|"**="
 REL ">"|"<"|"=="|"!="|"<="|">="
 PARA "("|")"|"{"|"}"
 DI ,|;
+
 
 %%
 "\n"             { numeroLinhas++; }
@@ -29,8 +31,13 @@ DI ,|;
 "double"         { yylval.codigo = yytext; yylval.tipo = "t_double"; return TK_TIPO_DOUBLE;}
 "bool"           { yylval.codigo = "int"; yylval.tipo = "t_bool"; return TK_TIPO_BOOL;}
 
+"input"          { return TK_INPUT; }
+"output"         { return TK_OUTPUT; }
+
 "if"             { return TK_IF; }
 "else"           { return TK_ELSE; }
+{LOGI}           { yylval.codigo = yytext; yylval.tipo = "logico"; return TK_LOGI; }
+"not"            { yylval.codigo = yytext; yylval.tipo = "logico"; return TK_NOT; }
 [+\-*/=]         { return *yytext; }
 {REL}            { yylval.codigo = yytext; yylval.tipo = "rel"; return TK_REL; }
 
