@@ -17,6 +17,8 @@ struct atributos
 	string conteudo;
 	string codigo;
 	string tipo;
+	string flagInicio;
+	string flagFim;
 };
 
 typedef struct atributos atributos;
@@ -41,12 +43,19 @@ vector< unordered_map<string, caracteristicas> > pilhaMaps;
 
 int yylex(void);
 void yyerror(string);
+string criaInstanciaTabela(string, string = "");
+void criaFlagLoop(string&, string&);
 string criaVariavelTemp(void);
 string criaFlag(void);
-string criaInstanciaTabela(string, string = "");
-string verificaExistencia(string, int);
-void imprimeBuffers(void);
+
 string regraCoercao(string, string, string);
+string verificaExistencia(string, int);
+void confirmaAtribuicao(string, int);
+string pegaTipo(string, int);
+
+void imprimeBuffers(void);
+void retiraDoMap(void);
+
 atributos geraCodigoOperacoes(atributos, atributos, string );
 atributos geraCodigoCoercaoExplicita(atributos , string );
 atributos geraCodigoRelacional(atributos, atributos, string );
@@ -55,19 +64,18 @@ atributos geraCodigoValores(atributos);
 atributos geraCodigoAtribuicao(atributos, atributos);
 atributos geraCodigoIf(atributos, atributos);
 atributos geraCodigoElse(atributos, atributos);
-void retiraDoMap(void);
-string pegaTipo(string, int);
 atributos geraCodigoLogico(atributos, atributos, string);
 atributos geraCodigoLogicoNot(atributos, string);
-void confirmaAtribuicao(string, int);
 atributos geraCodigoOutput(atributos);
 atributos geraCodigoInput(atributos);
+atributos geraCodigoWhile(atributos, atributos);
+atributos geraCodigoFor(atributos, atributos, atributos, atributos);
 
 %}
 
 %token TK_INT TK_FLOAT TK_EXP TK_OCTAL TK_HEX TK_BOOL
 %token TK_TIPO_INT TK_TIPO_BOOL TK_TIPO_DOUBLE TK_TIPO_FLOAT
-%token TK_IF TK_ELSE TK_INPUT TK_OUTPUT
+%token TK_IF TK_ELSE TK_INPUT TK_OUTPUT TK_WHILE TK_FOR
 %token TK_ID TK_REL TK_LOGI TK_NOT
 %token TK_FIM_LINHA TK_ESPACE TK_TABULACAO
 %token TK_FIM TK_ERROR
@@ -136,6 +144,25 @@ CONDI_ELSE  : CONDI_IF TK_ELSE BLOCO
 			}
 			;
 
+WHILE       : TK_WHILE '(' E ')' BLOCO
+			{
+				$$ = geraCodigoWhile($3, $5);
+				retiraDoMap();
+			}
+			;
+
+FOR         : TK_FOR '(' ATRI ';' E ';' E ')' BLOCO
+			{
+				$$ = geraCodigoFor($3, $5, $7, $9);
+				retiraDoMap();
+			}
+			| TK_FOR '(' DECLARA ';' E ';' E ')' BLOCO
+			{
+				$$ = geraCodigoFor($3, $5, $7, $9);
+				retiraDoMap();
+			}
+			;
+
 COMANDOS	: COMANDO COMANDOS
 			{
 				$$.codigo = $1.codigo + $2.codigo;
@@ -163,6 +190,14 @@ COMANDO 	: E ';'
 				$$ = $1;
 			}
 			| CONDI_ELSE
+			{
+				$$ = $1;
+			}
+			| WHILE
+			{
+				$$ = $1;
+			}
+			| FOR
 			{
 				$$ = $1;
 			}
@@ -325,22 +360,16 @@ string criaVariavelTemp(void) {
 	return prefixoRetornar;
 }
 
-string criaFlagInicio(void) {
-	string prefixoRetornar = "INICIO";
-	int sufixoRetornar = proxLabelInicio++;
+void criaFlagLoop(string &inicio, string &fim) {
+	inicio = "INICIO";
+	fim = "FIM";
+	
+	int sufixo = proxLabelInicio++;
+	inicio += to_string(sufixo);
 
-	prefixoRetornar += to_string(sufixoRetornar);
-
-	return prefixoRetornar;
-}
-
-string criaFlagFim(void) {
-	string prefixoRetornar = "FIM";
-	int sufixoRetornar = proxLabelFim++;
-
-	prefixoRetornar += to_string(sufixoRetornar);
-
-	return prefixoRetornar;
+	
+	sufixo = proxLabelFim++;
+	fim += to_string(sufixo);
 }
 
 string criaFlag(void) {
@@ -433,7 +462,7 @@ string regraCoercao(string tipoUm, string tipoDois, string operador) {
 	}
 	if(operador == "=")
 	{
-		if(tipoUm == "bool" && tipoDois!= "bool")
+		if(tipoUm == "bool" && tipoDois != "bool" && tipoDois != "int")
 		{
 			yyerror(string("Não é aceito coerção automatica de ") + tipoDois + " para " + tipoUm);
 		}
@@ -650,8 +679,10 @@ atributos geraCodigoIf(atributos exprecao, atributos bloco) {
 
 	string auxFlag = criaFlag();
 
-	structRetorno.codigo = exprecao.codigo + "\t" + auxCondicao + "=(int)" + exprecao.conteudo + ";\n\t" + auxCondicao + "=!" + auxCondicao + ";\n";
+	string tipo = regraCoercao("bool",exprecao.tipo,"=");
 
+	structRetorno.codigo = exprecao.codigo + "\t" + auxCondicao + "=" + exprecao.conteudo + ";\n\t" + auxCondicao + "=!" + auxCondicao + ";\n";
+	
 	structRetorno.codigo += "\tif(" + auxCondicao + ")\n\t  goto " + auxFlag + ";\n" + bloco.codigo + auxFlag + ":\n"; 
 
 	return structRetorno;
@@ -775,6 +806,58 @@ atributos geraCodigoOutput(atributos variavel) {
 	structRetorno.tipo = "output";
 	structRetorno.conteudo = "";
 	structRetorno.codigo = "\tstd::cout << " + verificaExistencia(variavel.codigo, mapAtual) + " << std::endl;\n";
+
+	return structRetorno;
+}
+
+atributos geraCodigoWhile(atributos exprecao, atributos bloco) {
+	atributos structRetorno;
+	
+	structRetorno.tipo = "loop";
+
+	string auxCondicao = criaVariavelTemp();
+	
+	structRetorno.conteudo = auxCondicao;
+
+	bufferDeclaracoes.push_back("\tint " + auxCondicao + ";\n");
+
+	string flagInicio, flagFim;
+	criaFlagLoop(flagInicio, flagFim);
+
+	structRetorno.flagInicio = flagInicio;
+	structRetorno.flagFim = flagFim;
+
+	string tipo = regraCoercao("bool",exprecao.tipo,"=");
+
+	structRetorno.codigo = exprecao.codigo + "\t" + auxCondicao + "=" + exprecao.conteudo + ";\n\t" + auxCondicao + "=!" + auxCondicao + ";\n";
+
+	structRetorno.codigo += flagInicio + ":\n\tif(" + auxCondicao + ")\n\t  goto " + flagFim + ";\n" + bloco.codigo + "\tgoto " + flagInicio + ";\n" + flagFim + ":\n"; 
+
+	return structRetorno;
+}
+
+atributos geraCodigoFor(atributos exprecaoUm, atributos exprecaoDois, atributos exprecaoTres, atributos bloco) {
+	atributos structRetorno;
+	
+	structRetorno.tipo = "loop";
+
+	string auxCondicao = criaVariavelTemp();
+	
+	structRetorno.conteudo = auxCondicao;
+
+	bufferDeclaracoes.push_back("\tint " + auxCondicao + ";\n");
+
+	string flagInicio, flagFim;
+	criaFlagLoop(flagInicio, flagFim);
+
+	structRetorno.flagInicio = flagInicio;
+	structRetorno.flagFim = flagFim;
+
+	string tipo = regraCoercao("bool",exprecaoDois.tipo,"=");
+
+	structRetorno.codigo = exprecaoUm.codigo + "\t" + auxCondicao + "=" + exprecaoUm.conteudo + ";\n\t" + auxCondicao + "=!" + auxCondicao + ";\n";
+
+	structRetorno.codigo += flagInicio + ":\n\tif(" + auxCondicao + ")\n\t  goto " + flagFim + ";\n" + bloco.codigo + exprecaoTres.codigo +"\tgoto " + flagInicio + ";\n" + flagFim + ":\n"; 
 
 	return structRetorno;
 }

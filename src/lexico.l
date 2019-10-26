@@ -34,6 +34,9 @@ DI ,|;
 "input"          { return TK_INPUT; }
 "output"         { return TK_OUTPUT; }
 
+"while"          { return TK_WHILE; }
+"for"          { return TK_FOR; }
+
 "if"             { return TK_IF; }
 "else"           { return TK_ELSE; }
 {LOGI}           { yylval.codigo = yytext; yylval.tipo = "logico"; return TK_LOGI; }
