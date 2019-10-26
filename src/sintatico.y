@@ -91,7 +91,7 @@ atributos geraCodigoAtribuicaoComposta(atributos, atributos, string);
 %left TK_NOT
 %left TK_REL
 %left '+' '-'
-%left '*' '/'
+%left '*' '/' '%'
 %left '(' ')'
 
 %%
@@ -167,17 +167,49 @@ WHILE       : TK_WHILE '(' E ')' BLOCO_LOOP
 			}
 			;
 
-FOR         : TK_FOR '(' ATRI ';' E ';' E ')' BLOCO_LOOP
-			{
-				$$ = geraCodigoFor($3, $5, $7, $9);
-				retiraDoMap();
-			}
-			| TK_FOR '(' DECLARA ';' E ';' E ')' BLOCO_LOOP
+FOR         : TK_FOR '(' AUXLOOP ';' E ';' ATRIS ')' BLOCO_LOOP
 			{
 				$$ = geraCodigoFor($3, $5, $7, $9);
 				retiraDoMap();
 			}
 			;
+
+ATRIS		: ATRI ',' ATRIS
+			{
+				$$.codigo = $1.codigo + $3.codigo;
+			}
+			| ATRI
+			{
+				$$.codigo = $1.codigo;
+			}
+			|
+			{
+				$$.codigo = "";
+			}
+			;
+
+AUXLOOP		: DECLARA ',' AUXLOOP
+			{
+				$$.codigo = $1.codigo + $3.codigo;
+			}
+			| ATRI ',' AUXLOOP
+			{
+				$$.codigo = $1.codigo + $3.codigo;
+			}
+			| DECLARA
+			{
+				$$.codigo = $1.codigo;
+			}
+			| ATRI
+			{
+				$$.codigo = $1.codigo;
+			}
+			|
+			{
+				$$.codigo = "";
+			}
+			;
+
 BREAK		: TK_BREAK '(' TK_INT ')'
 			{
 				$$ = geraCodigoBreak($3.codigo);
@@ -323,6 +355,10 @@ E 			: E '+' E
 			| E '/' E
 			{
 			    $$ = geraCodigoOperacoes($1,$3,"/");
+			}
+			| E '%' E
+			{
+			    $$ = geraCodigoOperacoes($1,$3,"%");
 			}
 			| E '-' E
 			{
