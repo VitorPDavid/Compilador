@@ -51,7 +51,6 @@ void inicializaPilhaBlocoAtual();
 
 string regraCoercao(string, string, string);
 string verificaExistencia(string, int);
-void confirmaAtribuicao(string, int);
 void checaLoopsPossiveis(int);
 string pegaTipo(string, int);
 
@@ -75,13 +74,14 @@ atributos geraCodigoWhile(atributos, atributos);
 atributos geraCodigoFor(atributos, atributos, atributos, atributos);
 atributos geraCodigoContinue(string);
 atributos geraCodigoBreak(string);
+atributos geraCodigoAtribuicaoComposta(atributos, atributos, string);
 
 %}
 
 %token TK_INT TK_FLOAT TK_EXP TK_OCTAL TK_HEX TK_BOOL
 %token TK_TIPO_INT TK_TIPO_BOOL TK_TIPO_DOUBLE TK_TIPO_FLOAT
 %token TK_IF TK_ELSE TK_INPUT TK_OUTPUT TK_WHILE TK_FOR TK_CONTINUE TK_BREAK
-%token TK_ID TK_REL TK_LOGI TK_NOT
+%token TK_ID TK_REL TK_LOGI TK_NOT TK_ATR
 %token TK_FIM_LINHA TK_ESPACE TK_TABULACAO
 %token TK_FIM TK_ERROR
 
@@ -255,6 +255,10 @@ COMANDO 	: E ';'
 ATRI		: TK_ID '=' E
 			{
 				$$ = geraCodigoAtribuicao($1,$3);
+			}
+			| TK_ID TK_ATR E
+			{
+				$$ = geraCodigoAtribuicaoComposta($1,$3,$2.codigo);
 			}
 			;
 
@@ -652,8 +656,6 @@ atributos geraCodigoDeclaComExp(atributos elementoUm, atributos elementoDois, st
 	elementoUm.tipo = tipo;
 	
 	string aux = criaInstanciaTabela(elementoUm.codigo, tipo);
-	
-	// confirmaAtribuicao(elementoUm.codigo, mapAtual);
 
 	if(elementoUm.tipo == elementoDois.tipo)
 	{
@@ -694,8 +696,6 @@ atributos geraCodigoAtribuicao(atributos elementoUm, atributos elementoDois) {
 	string aux = verificaExistencia(elementoUm.codigo, mapAtual);
 	
 	string tipoAux = pegaTipo(elementoUm.codigo, mapAtual);
-	
-	// confirmaAtribuicao(elementoUm.codigo, mapAtual);
 
 	if(elementoDois.tipo == tipoAux)
 	{
@@ -707,6 +707,30 @@ atributos geraCodigoAtribuicao(atributos elementoUm, atributos elementoDois) {
 	{
 		string tempTipo = regraCoercao(tipoAux,elementoDois.tipo,"=");
 		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=(" + tempTipo + ")" + elementoDois.conteudo + ";\n";
+		structRetorno.conteudo = aux;
+		structRetorno.tipo = "ope";
+	}
+
+	return structRetorno;
+}
+
+atributos geraCodigoAtribuicaoComposta(atributos elementoUm, atributos elementoDois, string tipo) {
+	atributos structRetorno;
+
+	string aux = verificaExistencia(elementoUm.codigo, mapAtual);
+	
+	string tipoAux = pegaTipo(elementoUm.codigo, mapAtual);
+
+	if(elementoDois.tipo == tipoAux)
+	{
+		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + aux + tipo[0] + elementoDois.conteudo + ";\n";
+		structRetorno.conteudo = aux;
+		structRetorno.tipo = "ope";
+	}
+	else
+	{
+		string tempTipo = regraCoercao(tipoAux,elementoDois.tipo,"=");
+		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + aux + tipo[0] + "(" + tempTipo + ")" + elementoDois.conteudo + ";\n";
 		structRetorno.conteudo = aux;
 		structRetorno.tipo = "ope";
 	}
@@ -826,29 +850,6 @@ atributos geraCodigoLogicoNot(atributos elemento, string operacao) {
 	structRetorno.codigo = elemento.codigo + "\t" + structRetorno.conteudo + "=!" + elemento.conteudo + ";\n";
 	
 	return structRetorno;
-}
-
-void confirmaAtribuicao(string variavel, int mapBusca) {
-	if(mapBusca == 0) {
-		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
-
-		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
-			yyerror("Variavel \""+ variavel +"\" não declarada");
-		} else {
-			(pilhaMaps[mapBusca])[variavel].atribuido = true;
-		}
-		yyerror("Erro na função de confirmar atribuição");
-	} else {
-		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
-		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
-			confirmaAtribuicao(variavel, mapBusca - 1);
-		}
-		else {
-			(pilhaMaps[mapBusca])[variavel].atribuido = true;
-		}
-		yyerror("Erro na função de confirmar atribuição");
-	}
-	yyerror("Erro na função de confirmar atribuição");
 }
 
 atributos geraCodigoInput(atributos variavel) {
@@ -988,3 +989,4 @@ void checaLoopsPossiveis(int quantosLoops) {
 		yyerror("Não é possivel realizar essa operação nessa quantidade de loops");
 	}
 }
+

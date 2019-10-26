@@ -14,7 +14,7 @@ BOOL "true"|"false"
 LOGI "or"|"and"
 OP_MA_P '*'|'/'|'%'
 OP_M_P '+'|'-'
-ATR "+="|"-="|"*="|"/="|"="|"**="
+ATR "+="|"-="|"*="|"/="|"%="
 REL ">"|"<"|"=="|"!="|"<="|">="
 PARA "("|")"|"{"|"}"
 DI ,|;
@@ -46,6 +46,8 @@ DI ,|;
 
 [+\-*/=]         { return *yytext; }
 {REL}            { yylval.codigo = yytext; yylval.tipo = "rel"; return TK_REL; }
+
+{ATR}            { yylval.codigo = yytext; yylval.tipo = "atri"; return TK_ATR; }
 
 {INT}            { yylval.codigo = yytext; yylval.tipo = "int"; return TK_INT; }
 {FLOAT}          { yylval.codigo = yytext; yylval.tipo = "float"; return TK_FLOAT; }
