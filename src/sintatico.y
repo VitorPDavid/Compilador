@@ -12,48 +12,51 @@
 
 using namespace std;
 
-struct atributos
-{
+typedef struct {
+	string flagInicio;
+	string flagFim;
+	string flagContadorFor;
+} flagsBloco;
+
+typedef struct {
 	string conteudo;
 	string codigo;
 	string tipo;
-	string flagInicio;
-	string flagFim;
-};
+} atributos;
 
-typedef struct atributos atributos;
-
-int ProxVariavelTemp = 0;
-int numeroLinhas = 1;
-int proxLabelFim = 0;
-int proxLabelInicio = 0;
-int proxLabel = 0;
-
-typedef struct{
+typedef struct {
 	string temporaria;
 	string tipo;
 	bool atribuido;
 } caracteristicas;
 
+int ProxVariavelTemp = 0;
+int numeroLinhas = 1;
+int proxLabelLoop = 0;
+int proxLabel = 0;
+int mapAtual = -1;
+
 vector<string> bufferDeclaracoes;
-
-int mapAtual = 0;
-
 vector< unordered_map<string, caracteristicas> > pilhaMaps;
+vector< flagsBloco > pilhaFlagsBlocos;
 
-int yylex(void);
-void yyerror(string);
 string criaInstanciaTabela(string, string = "");
-void criaFlagLoop(string&, string&);
+void criaFlagLoop(string&, string&, string&);
 string criaVariavelTemp(void);
 string criaFlag(void);
+void yyerror(string);
+int yylex(void);
+
+void inicializaPilhaBlocoAtual();
 
 string regraCoercao(string, string, string);
 string verificaExistencia(string, int);
 void confirmaAtribuicao(string, int);
+void checaLoopsPossiveis(int);
 string pegaTipo(string, int);
 
 void imprimeBuffers(void);
+void adicionaNoMap(void);
 void retiraDoMap(void);
 
 atributos geraCodigoOperacoes(atributos, atributos, string );
@@ -70,12 +73,14 @@ atributos geraCodigoOutput(atributos);
 atributos geraCodigoInput(atributos);
 atributos geraCodigoWhile(atributos, atributos);
 atributos geraCodigoFor(atributos, atributos, atributos, atributos);
+atributos geraCodigoContinue(string);
+atributos geraCodigoBreak(string);
 
 %}
 
 %token TK_INT TK_FLOAT TK_EXP TK_OCTAL TK_HEX TK_BOOL
 %token TK_TIPO_INT TK_TIPO_BOOL TK_TIPO_DOUBLE TK_TIPO_FLOAT
-%token TK_IF TK_ELSE TK_INPUT TK_OUTPUT TK_WHILE TK_FOR
+%token TK_IF TK_ELSE TK_INPUT TK_OUTPUT TK_WHILE TK_FOR TK_CONTINUE TK_BREAK
 %token TK_ID TK_REL TK_LOGI TK_NOT
 %token TK_FIM_LINHA TK_ESPACE TK_TABULACAO
 %token TK_FIM TK_ERROR
@@ -89,7 +94,6 @@ atributos geraCodigoFor(atributos, atributos, atributos, atributos);
 %left '*' '/'
 %left '(' ')'
 
-
 %%
 
 S 			: AUX_S COMANDOS
@@ -101,8 +105,8 @@ S 			: AUX_S COMANDOS
 			;
 AUX_S       :
 			{
-				unordered_map<string, caracteristicas> auxMapGlobal;
-				pilhaMaps.push_back(auxMapGlobal);
+				adicionaNoMap();
+
 				$$.codigo = "";
 			}
 			;
@@ -115,12 +119,24 @@ BLOCO		: AUX_BLOCO '{' COMANDOS '}'
 
 AUX_BLOCO   : 
 			{
-				unordered_map<string, caracteristicas> auxMapGlobal;
-				pilhaMaps.push_back(auxMapGlobal);
-				mapAtual++;
+				adicionaNoMap();
 				
 				$$.codigo = "";
 			}
+
+BLOCO_LOOP	: AUXBLOCOLO '{' COMANDOS '}'
+			{
+				$$.codigo = $3.codigo;
+			}
+			;
+
+AUXBLOCOLO	: 
+			{
+				adicionaNoMap();
+				inicializaPilhaBlocoAtual();
+				$$.codigo = "";
+			}
+			;
 
 CONDI_IF	: TK_IF '(' E ')' BLOCO
 			{
@@ -144,25 +160,42 @@ CONDI_ELSE  : CONDI_IF TK_ELSE BLOCO
 			}
 			;
 
-WHILE       : TK_WHILE '(' E ')' BLOCO
+WHILE       : TK_WHILE '(' E ')' BLOCO_LOOP
 			{
 				$$ = geraCodigoWhile($3, $5);
 				retiraDoMap();
 			}
 			;
 
-FOR         : TK_FOR '(' ATRI ';' E ';' E ')' BLOCO
+FOR         : TK_FOR '(' ATRI ';' E ';' E ')' BLOCO_LOOP
 			{
 				$$ = geraCodigoFor($3, $5, $7, $9);
 				retiraDoMap();
 			}
-			| TK_FOR '(' DECLARA ';' E ';' E ')' BLOCO
+			| TK_FOR '(' DECLARA ';' E ';' E ')' BLOCO_LOOP
 			{
 				$$ = geraCodigoFor($3, $5, $7, $9);
 				retiraDoMap();
 			}
 			;
-
+BREAK		: TK_BREAK '(' TK_INT ')'
+			{
+				$$ = geraCodigoBreak($3.codigo);
+			}
+			| TK_BREAK
+			{
+				$$ = geraCodigoBreak("");
+			}
+			;
+CONTINUE	: TK_CONTINUE '(' TK_INT ')'
+			{
+				$$ = geraCodigoContinue($3.codigo);
+			}
+			| TK_CONTINUE
+			{
+				$$ = geraCodigoContinue("");
+			}
+			;
 COMANDOS	: COMANDO COMANDOS
 			{
 				$$.codigo = $1.codigo + $2.codigo;
@@ -206,6 +239,14 @@ COMANDO 	: E ';'
 				$$ = $1;
 			}
 			| OUTPUT ';'
+			{
+				$$ = $1;
+			}
+			| CONTINUE ';'
+			{
+				$$ = $1;
+			}
+			| BREAK ';'
 			{
 				$$ = $1;
 			}
@@ -333,6 +374,14 @@ E 			: E '+' E
 			{
 				$$ = geraCodigoRelacional($1, $3, $2.codigo);	
 			}
+			| ATRI 
+			{
+				$$ = $1;
+			}
+			| DECLARA
+			{
+				$$ = $1;
+			}
 			;
 %%
 
@@ -360,16 +409,15 @@ string criaVariavelTemp(void) {
 	return prefixoRetornar;
 }
 
-void criaFlagLoop(string &inicio, string &fim) {
+void criaFlagLoop(string &inicio, string &fim, string &aux) {
 	inicio = "INICIO";
 	fim = "FIM";
-	
-	int sufixo = proxLabelInicio++;
-	inicio += to_string(sufixo);
+	aux = "CONTADOR";
 
-	
-	sufixo = proxLabelFim++;
+	int sufixo = proxLabelLoop++;
+	inicio += to_string(sufixo);
 	fim += to_string(sufixo);
+	aux += to_string(sufixo);
 }
 
 string criaFlag(void) {
@@ -711,7 +759,20 @@ atributos geraCodigoElse(atributos atriIf, atributos bloco) {
 
 void retiraDoMap(void) {
 	pilhaMaps.pop_back();
+
+	pilhaFlagsBlocos.pop_back();
+
 	mapAtual--;
+}
+
+void adicionaNoMap(void) {
+	unordered_map<string, caracteristicas> auxMapGlobal;
+	pilhaMaps.push_back(auxMapGlobal);
+
+	flagsBloco auxFlagMaps;
+	pilhaFlagsBlocos.push_back(auxFlagMaps);
+
+	mapAtual++;
 }
 
 string pegaTipo(string variavel, int mapBusca) {
@@ -821,12 +882,9 @@ atributos geraCodigoWhile(atributos exprecao, atributos bloco) {
 
 	bufferDeclaracoes.push_back("\tint " + auxCondicao + ";\n");
 
-	string flagInicio, flagFim;
-	criaFlagLoop(flagInicio, flagFim);
-
-	structRetorno.flagInicio = flagInicio;
-	structRetorno.flagFim = flagFim;
-
+	string flagInicio = pilhaFlagsBlocos[mapAtual].flagInicio;
+	string flagFim = pilhaFlagsBlocos[mapAtual].flagFim;
+	
 	string tipo = regraCoercao("bool",exprecao.tipo,"=");
 
 	structRetorno.codigo = exprecao.codigo + "\t" + auxCondicao + "=" + exprecao.conteudo + ";\n\t" + auxCondicao + "=!" + auxCondicao + ";\n";
@@ -847,17 +905,86 @@ atributos geraCodigoFor(atributos exprecaoUm, atributos exprecaoDois, atributos 
 
 	bufferDeclaracoes.push_back("\tint " + auxCondicao + ";\n");
 
-	string flagInicio, flagFim;
-	criaFlagLoop(flagInicio, flagFim);
-
-	structRetorno.flagInicio = flagInicio;
-	structRetorno.flagFim = flagFim;
+	string flagInicio = pilhaFlagsBlocos[mapAtual].flagInicio;
+	string flagFim = pilhaFlagsBlocos[mapAtual].flagFim;
+	string flagContadorFor = pilhaFlagsBlocos[mapAtual].flagContadorFor;
 
 	string tipo = regraCoercao("bool",exprecaoDois.tipo,"=");
 
-	structRetorno.codigo = exprecaoUm.codigo + "\t" + auxCondicao + "=" + exprecaoUm.conteudo + ";\n\t" + auxCondicao + "=!" + auxCondicao + ";\n";
+	structRetorno.codigo = exprecaoUm.codigo + "\tgoto " + flagContadorFor + ";\n" + flagInicio + ":\n" + exprecaoTres.codigo + flagContadorFor + ":\n";
 
-	structRetorno.codigo += flagInicio + ":\n\tif(" + auxCondicao + ")\n\t  goto " + flagFim + ";\n" + bloco.codigo + exprecaoTres.codigo +"\tgoto " + flagInicio + ";\n" + flagFim + ":\n"; 
+	structRetorno.codigo += exprecaoDois.codigo + "\t" + auxCondicao + "=" + exprecaoDois.conteudo + ";\n\t" + auxCondicao + "=!" + auxCondicao + ";\n"; 
+
+	structRetorno.codigo += "\tif(" + auxCondicao + ")\n\t  goto " + flagFim + ";\n" + bloco.codigo +"\tgoto " + flagInicio + ";\n" + flagFim + ":\n"; 
 
 	return structRetorno;
+}
+
+void inicializaPilhaBlocoAtual(void) {
+	string flagInicio, flagFim, flagContadorFor;
+
+	criaFlagLoop(flagInicio, flagFim, flagContadorFor);
+
+	pilhaFlagsBlocos[mapAtual].flagInicio = flagInicio;
+	pilhaFlagsBlocos[mapAtual].flagFim = flagFim;
+	pilhaFlagsBlocos[mapAtual].flagContadorFor = flagContadorFor;
+}
+
+atributos geraCodigoContinue(string qualLoop) {
+	atributos structRetorno;
+
+	structRetorno.tipo = "";
+	structRetorno.conteudo = "";
+	
+	if (qualLoop != "") {
+		int quantosLoops = stoi(qualLoop);	
+		
+		checaLoopsPossiveis(quantosLoops);
+		
+		structRetorno.codigo = "\tgoto " + pilhaFlagsBlocos[mapAtual - quantosLoops + 1].flagInicio + ";\n";
+	} else {
+		checaLoopsPossiveis(1);
+		structRetorno.codigo = "\tgoto " + pilhaFlagsBlocos[mapAtual].flagInicio + ";\n";
+	}
+
+	return structRetorno;
+}
+
+atributos geraCodigoBreak(string qualLoop) {
+	atributos structRetorno;
+
+	structRetorno.tipo = "";
+	structRetorno.conteudo = "";
+	
+	if (qualLoop != "") {
+		int quantosLoops = stoi(qualLoop);	
+		
+		checaLoopsPossiveis(quantosLoops);
+		
+		structRetorno.codigo = "\tgoto " + pilhaFlagsBlocos[mapAtual - quantosLoops + 1].flagFim + ";\n";
+	} else {
+		checaLoopsPossiveis(1);
+		structRetorno.codigo = "\tgoto " + pilhaFlagsBlocos[mapAtual].flagFim + ";\n";
+	}
+
+	return structRetorno;
+}
+
+void checaLoopsPossiveis(int quantosLoops) {
+
+	int quantosLoopsPossiveis = 0;
+
+	for(int i = mapAtual; i >= 0 ; i--) {
+		if (pilhaFlagsBlocos[i].flagInicio != "" && pilhaFlagsBlocos[i].flagFim != "") {
+			
+			quantosLoopsPossiveis++;
+
+		} else {
+			break;
+		}
+	}
+
+	if ( quantosLoops <= 0  || quantosLoops > quantosLoopsPossiveis) {
+		yyerror("Não é possivel realizar essa operação nessa quantidade de loops");
+	}
 }

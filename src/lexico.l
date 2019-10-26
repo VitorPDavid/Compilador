@@ -1,6 +1,5 @@
 %{
   #include <string>
-  //{REL}            { yylval.codigo = yytext; yylval.tipo = "rel"; return TK_REL; }
 %}
 
 ALPHANUM [0-1a-zA-Z]
@@ -35,12 +34,16 @@ DI ,|;
 "output"         { return TK_OUTPUT; }
 
 "while"          { return TK_WHILE; }
-"for"          { return TK_FOR; }
+"for"            { return TK_FOR; }
+"continue"       { return TK_CONTINUE; }
+"break"          { return TK_BREAK; }
 
 "if"             { return TK_IF; }
 "else"           { return TK_ELSE; }
+
 {LOGI}           { yylval.codigo = yytext; yylval.tipo = "logico"; return TK_LOGI; }
 "not"            { yylval.codigo = yytext; yylval.tipo = "logico"; return TK_NOT; }
+
 [+\-*/=]         { return *yytext; }
 {REL}            { yylval.codigo = yytext; yylval.tipo = "rel"; return TK_REL; }
 
