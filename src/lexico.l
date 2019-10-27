@@ -19,8 +19,10 @@ REL ">"|"<"|"=="|"!="|"<="|">="
 PARA "("|")"|"{"|"}"
 DI ,|;
 
+%x strAs
 
 %%
+
 "\n"             { numeroLinhas++; }
 [ ]+             {}
 [\t]+            {}
@@ -52,7 +54,7 @@ DI ,|;
 {INT}            { yylval.codigo = yytext; yylval.tipo = "int"; return TK_INT; }
 {FLOAT}          { yylval.codigo = yytext; yylval.tipo = "float"; return TK_FLOAT; }
 {BOOL}           { yylval.codigo = yytext; yylval.tipo = "bool"; return TK_BOOL; }
-{ID}             { yylval.codigo = yytext; return TK_ID; }
+{ID}             { yylval.codigo = yytext; yylval.tipo = "id"; return TK_ID; }
 
 [(){}[\];,]	     { return *yytext; }
 

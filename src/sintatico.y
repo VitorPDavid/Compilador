@@ -75,6 +75,8 @@ atributos geraCodigoFor(atributos, atributos, atributos, atributos);
 atributos geraCodigoContinue(string);
 atributos geraCodigoBreak(string);
 atributos geraCodigoAtribuicaoComposta(atributos, atributos, string);
+atributos geraCodigoParaMultiploOutput(atributos, atributos);
+atributos geraCodigoParaMultiploInput(atributos, atributos);
 
 %}
 
@@ -84,6 +86,7 @@ atributos geraCodigoAtribuicaoComposta(atributos, atributos, string);
 %token TK_ID TK_REL TK_LOGI TK_NOT TK_ATR
 %token TK_FIM_LINHA TK_ESPACE TK_TABULACAO
 %token TK_FIM TK_ERROR
+%token TK_STR
 
 %start S
 
@@ -294,15 +297,43 @@ ATRI		: TK_ID '=' E
 			}
 			;
 
-INPUT		: TK_ID '=' TK_INPUT '(' ')'
+INPUT		: IDS '=' TK_INPUT '(' ')'
+			{
+				$$ = geraCodigoInput($1);
+			}
+			| TK_ID '=' TK_INPUT '(' ')'
 			{
 				$$ = geraCodigoInput($1);
 			}
 			;
 
-OUTPUT		: TK_OUTPUT '(' TK_ID ')'
+IDS			: TK_ID ',' IDS
+			{
+				$$ = geraCodigoParaMultiploInput($1, $3);
+			}
+			| TK_ID
+			{
+				$$.codigo = $1.codigo;
+				$$.conteudo = "verificar";
+			}
+			;			
+
+OUTPUT		: TK_OUTPUT '(' ES ')'
 			{
 				$$ = geraCodigoOutput($3);
+			}
+			;
+ES			: E ',' ES
+			{
+				$$ = geraCodigoParaMultiploOutput($1, $3);
+			}
+			| E
+			{
+				$$.codigo = $1.codigo;
+			}
+			|
+			{
+				$$.codigo = "";
 			}
 			;
 
@@ -888,22 +919,48 @@ atributos geraCodigoLogicoNot(atributos elemento, string operacao) {
 	return structRetorno;
 }
 
-atributos geraCodigoInput(atributos variavel) {
+atributos geraCodigoInput(atributos variaveis) {
 	atributos structRetorno;
 
 	structRetorno.tipo = "input";
 	structRetorno.conteudo = "";
-	structRetorno.codigo = "\tstd::cin >> " + verificaExistencia(variavel.codigo, mapAtual) + ";\n";
-
+	if( variaveis.tipo == "id") {
+		structRetorno.codigo = "\tstd::cin >> " + verificaExistencia(variaveis.codigo,mapAtual) + ";\n";
+	} else {
+		structRetorno.codigo = "\tstd::cin >> " + variaveis.codigo + ";\n";
+	}
+	
 	return structRetorno;
 }
 
-atributos geraCodigoOutput(atributos variavel) {
+atributos geraCodigoParaMultiploInput(atributos id, atributos outrosIds) {
+	atributos structRetorno;
+	
+
+	if (outrosIds.conteudo == "verificar") {
+		structRetorno.codigo = verificaExistencia(id.codigo, mapAtual) + " >> " + verificaExistencia(outrosIds.codigo, mapAtual);
+	} else {
+		structRetorno.codigo = verificaExistencia(id.codigo, mapAtual) + " >> " + outrosIds.codigo;
+	}
+	
+	return structRetorno;
+}
+
+atributos geraCodigoOutput(atributos exprecoes) {
 	atributos structRetorno;
 
 	structRetorno.tipo = "output";
 	structRetorno.conteudo = "";
-	structRetorno.codigo = "\tstd::cout << " + verificaExistencia(variavel.codigo, mapAtual) + " << std::endl;\n";
+	structRetorno.codigo = exprecoes.codigo + "\tstd::cout << " + exprecoes.conteudo + " << std::endl;\n";
+
+	return structRetorno;
+}
+
+atributos geraCodigoParaMultiploOutput(atributos exprecao, atributos outraExprecoes) {
+	atributos structRetorno;
+
+	structRetorno.codigo = exprecao.codigo + outraExprecoes.codigo;
+	structRetorno.conteudo = exprecao.conteudo + " <<\" \"<< " + outraExprecoes.conteudo;
 
 	return structRetorno;
 }
@@ -1025,4 +1082,3 @@ void checaLoopsPossiveis(int quantosLoops) {
 		yyerror("Não é possivel realizar essa operação nessa quantidade de loops");
 	}
 }
-
