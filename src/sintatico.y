@@ -22,12 +22,13 @@ typedef struct {
 	string conteudo;
 	string codigo;
 	string tipo;
+	string tamanho;
 } atributos;
 
 typedef struct {
 	string temporaria;
 	string tipo;
-	bool atribuido;
+	string tamanho;
 } caracteristicas;
 
 int ProxVariavelTemp = 0;
@@ -40,7 +41,7 @@ vector<string> bufferDeclaracoes;
 vector< unordered_map<string, caracteristicas> > pilhaMaps;
 vector< flagsBloco > pilhaFlagsBlocos;
 
-string criaInstanciaTabela(string, string = "");
+string criaInstanciaTabela(string, string = "", string = "0");
 void criaFlagLoop(string&, string&, string&);
 string criaVariavelTemp(void);
 string criaFlag(void);
@@ -50,8 +51,12 @@ int yylex(void);
 void inicializaPilhaBlocoAtual();
 
 string regraCoercao(string, string, string);
-string verificaExistencia(string, int);
 void checaLoopsPossiveis(int);
+
+//TODO refatorar ? fazem a mesma busca.
+string verificaExistencia(string, int);
+void adicionaTamanho(string, int, string);
+string pegaTamanho(string , int);
 string pegaTipo(string, int);
 
 void imprimeBuffers(void);
@@ -77,16 +82,16 @@ atributos geraCodigoBreak(string);
 atributos geraCodigoAtribuicaoComposta(atributos, atributos, string);
 atributos geraCodigoParaMultiploOutput(atributos, atributos);
 atributos geraCodigoParaMultiploInput(atributos, atributos);
+atributos geraCodigoOperadorTamanho(atributos);
 
 %}
 
-%token TK_INT TK_FLOAT TK_EXP TK_OCTAL TK_HEX TK_BOOL
-%token TK_TIPO_INT TK_TIPO_BOOL TK_TIPO_DOUBLE TK_TIPO_FLOAT
+%token TK_INT TK_FLOAT TK_EXP TK_OCTAL TK_HEX TK_BOOL TK_STR
+%token TK_TIPO_INT TK_TIPO_BOOL TK_TIPO_DOUBLE TK_TIPO_FLOAT TK_TIPO_STR
 %token TK_IF TK_ELSE TK_INPUT TK_OUTPUT TK_WHILE TK_FOR TK_CONTINUE TK_BREAK
-%token TK_ID TK_REL TK_LOGI TK_NOT TK_ATR
+%token TK_ID TK_REL TK_LOGI TK_NOT TK_ATR TK_OP_LEN
 %token TK_FIM_LINHA TK_ESPACE TK_TABULACAO
 %token TK_FIM TK_ERROR
-%token TK_STR
 
 %start S
 
@@ -95,6 +100,7 @@ atributos geraCodigoParaMultiploInput(atributos, atributos);
 %left TK_REL
 %left '+' '-'
 %left '*' '/' '%'
+%left TK_OP_LEN
 %left '(' ')'
 
 %%
@@ -373,6 +379,15 @@ DECLARA		: TK_TIPO_INT TK_ID
 			{
 				$$ = geraCodigoDeclaComExp($2,$4,"bool");
 			}
+			| TK_TIPO_STR TK_ID
+			{
+				criaInstanciaTabela($2.codigo, "str", to_string(0));
+				$$.codigo = "";
+			}
+			| TK_TIPO_STR TK_ID '=' E
+			{
+				$$ = geraCodigoDeclaComExp($2,$4,"str");
+			}
 			;
 
 E 			: E '+' E
@@ -427,11 +442,23 @@ E 			: E '+' E
 			{
 				$$ = geraCodigoValores($1);
 			}
+			| TK_STR
+			{
+				$$ = geraCodigoValores($1);
+			}
 			| TK_ID
 			{
 				$$.conteudo = verificaExistencia($1.codigo, mapAtual);
-				$$.tipo = pegaTipo($1.codigo, mapAtual);
+				string tipo = pegaTipo($1.codigo, mapAtual);
+				string tamanho = pegaTamanho($1.codigo, mapAtual);
+				$$.tipo = tipo;
+				if (tipo == "str") {
+					$$.tamanho = tamanho;
+				} else {
+					$$.tamanho = "";
+				}
 				$$.codigo = "";
+				cout << $$.conteudo << $$.tipo << tamanho << endl;
 			}
 			| E TK_LOGI E
 			{
@@ -445,13 +472,10 @@ E 			: E '+' E
 			{
 				$$ = geraCodigoRelacional($1, $3, $2.codigo);	
 			}
-			| ATRI 
+			| E TK_OP_LEN '(' ')' 
 			{
-				$$ = $1;
-			}
-			| DECLARA
-			{
-				$$ = $1;
+				cout << $1.tamanho << endl;
+				$$ = geraCodigoOperadorTamanho($1);
 			}
 			;
 %%
@@ -525,7 +549,28 @@ string verificaExistencia(string variavel, int mapBusca){
 	yyerror("Erro na função de verificação do ID");
 }
 
-string criaInstanciaTabela(string variavel, string tipo) {
+void adicionaTamanho(string variavel, int mapBusca, string tamanho) {
+
+	if(mapBusca == 0) {
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+
+		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			yyerror("Variavel \""+ variavel +"\" não declarada");
+		} else {
+			(pilhaMaps[mapBusca])[variavel].tamanho = tamanho;
+		}
+	} else {
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			adicionaTamanho(variavel, mapBusca - 1, tamanho);
+		}
+		else {
+			(pilhaMaps[mapBusca])[variavel].tamanho = tamanho;
+		}
+	}
+}
+
+string criaInstanciaTabela(string variavel, string tipo, string tamanho) {
 	// unordered_map<string, caracteristicas> table = (pilhaMaps[mapAtual]);
 
 	unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps.back()).find(variavel);
@@ -536,16 +581,26 @@ string criaInstanciaTabela(string variavel, string tipo) {
 		novaVariavel.temporaria = criaVariavelTemp();
 
 		novaVariavel.tipo = tipo;
-		novaVariavel.atribuido = false;
+
+		if(tipo == "bool")
+			bufferDeclaracoes.push_back("\tint " + novaVariavel.temporaria + ";\n");
+		else if (tipo == "str")
+		{
+			int tamanhoString = stoi(tamanho);
+			
+			if (tamanhoString < 50) {
+				bufferDeclaracoes.push_back("\tchar* " + novaVariavel.temporaria + "=(char*)malloc(50*sizeof(char));\n");
+			} else {
+				bufferDeclaracoes.push_back("\tchar* " + novaVariavel.temporaria + "=(char*)malloc(" + to_string(tamanhoString) + "*sizeof(char));\n");
+			}
+
+			novaVariavel.tamanho = tamanho;
+		} else
+			bufferDeclaracoes.push_back("\t" + tipo + " " + novaVariavel.temporaria + ";\n");
 
 		(pilhaMaps.back())[variavel] = novaVariavel;
 
-		if(tipo == "bool")
-			bufferDeclaracoes.push_back("\tint " + (pilhaMaps.back())[variavel].temporaria + ";\n");
-		else
-			bufferDeclaracoes.push_back("\t" + tipo + " " + (pilhaMaps.back())[variavel].temporaria + ";\n");
-
-		return (pilhaMaps.back())[variavel].temporaria;
+		return novaVariavel.temporaria;
 	}
 	else {
 		return (pilhaMaps.back())[variavel].temporaria;
@@ -568,6 +623,10 @@ string regraCoercao(string tipoUm, string tipoDois, string operador) {
 		if(tipoUm == string("bool") || tipoDois == string("bool"))
 		{
 			yyerror(string("Operador dessa linha não aceita tipo booleano"));
+			return string("erro");
+		} 
+		else if (tipoUm == string("str") || tipoDois == string("str")) {
+			yyerror(string("String ainda n tem operadores"));
 			return string("erro");
 		}
 		else if(tipoUm == string("double") || tipoDois == string("double"))
@@ -600,7 +659,7 @@ string regraCoercao(string tipoUm, string tipoDois, string operador) {
 	{
 		if(tipoUm == string("bool") || tipoDois == string("bool"))
 		{
-			yyerror(string("operadores: soma, subtração, divisão e multiplicação não aceitam tipo booleano"));
+			//TODO ajustar
 			return string("erro");
 		}
 		else if(tipoUm == string("double") || tipoDois == string("double"))
@@ -628,14 +687,28 @@ atributos geraCodigoOperacoes(atributos elementoUm, atributos elementoDois, stri
 
 	structRetorno.conteudo = criaVariavelTemp();
 
+	// TODO Isso deve ficar aqui ???
 	if(elementoUm.tipo == "bool" || elementoDois.tipo == "bool")
 		yyerror("operação \"" + operacao + "\" não permitida entre bools");
 
 	if(elementoUm.tipo == elementoDois.tipo)
 	{
 		structRetorno.tipo = elementoUm.tipo;
-		bufferDeclaracoes.push_back("\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n");
-		structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + elementoDois.conteudo + ";\n";
+		if (structRetorno.tipo == "str") {
+			int tamanhoString = stoi(elementoUm.tamanho) + stoi(elementoDois.tamanho);
+			// TODO Refatorar isso
+			if (tamanhoString < 50) {
+			bufferDeclaracoes.push_back("\tchar* " + structRetorno.conteudo + "=(char*)malloc(50*sizeof(char));\n");
+			} else {
+				bufferDeclaracoes.push_back("\tchar* " + structRetorno.conteudo + "=(char*)malloc(" + to_string(tamanhoString) + "*sizeof(char));\n");
+			}
+			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\tstrcpy(" + structRetorno.conteudo + "," + elementoUm.conteudo + ");\n";
+			structRetorno.codigo += "\tstrcat(" + structRetorno.conteudo + "," + elementoDois.conteudo + ");\n";
+			structRetorno.tamanho = to_string(tamanhoString);
+		} else {
+			bufferDeclaracoes.push_back("\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n");
+			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + elementoDois.conteudo + ";\n";
+		}
 	}
 	else
 	{
@@ -722,17 +795,34 @@ atributos geraCodigoDeclaComExp(atributos elementoUm, atributos elementoDois, st
 
 	elementoUm.tipo = tipo;
 	
-	string aux = criaInstanciaTabela(elementoUm.codigo, tipo);
+	string aux;
 
-	if(elementoUm.tipo == elementoDois.tipo)
-	{
-		structRetorno.tipo = elementoUm.tipo;
-		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + elementoDois.conteudo + ";\n";
-	}
-	else
-	{
-		structRetorno.tipo = regraCoercao(elementoUm.tipo,elementoDois.tipo,"=");
-		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=(" + structRetorno.tipo + ")" + elementoDois.conteudo + ";\n";
+	if (tipo == "str") {
+		
+		if(elementoUm.tipo == elementoDois.tipo)
+		{
+			aux = criaInstanciaTabela(elementoUm.codigo, tipo, elementoDois.tamanho);
+			structRetorno.tipo = elementoUm.tipo;
+			structRetorno.codigo = elementoDois.codigo + "\tstrcpy(" + aux + "," + elementoDois.conteudo + ");\n";
+			structRetorno.tamanho = elementoDois.tamanho;
+		}
+		else
+		{
+			yyerror("não existe coerção com string ainda");
+			aux = criaInstanciaTabela(elementoUm.codigo, tipo, elementoDois.tamanho);
+		}
+	} else {
+		aux = criaInstanciaTabela(elementoUm.codigo, tipo);
+		if(elementoUm.tipo == elementoDois.tipo)
+		{
+			structRetorno.tipo = elementoUm.tipo;
+			structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + elementoDois.conteudo + ";\n";
+		}
+		else
+		{
+			structRetorno.tipo = regraCoercao(elementoUm.tipo,elementoDois.tipo,"=");
+			structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=(" + structRetorno.tipo + ")" + elementoDois.conteudo + ";\n";
+		}
 	}
 
 	return structRetorno;
@@ -747,9 +837,20 @@ atributos geraCodigoValores(atributos elemento) {
 	{
 		bufferDeclaracoes.push_back("\tint " + structRetorno.conteudo + ";\n");
 		structRetorno.codigo = "\t" + structRetorno.conteudo + "=" + elemento.codigo + ";\n";
-	}
-	else
-	{
+	} else if (structRetorno.tipo == "str") {
+
+		int tamanhoString = stoi(elemento.tamanho);
+
+		// TODO Refatorar isso
+		if (tamanhoString < 50) {
+			bufferDeclaracoes.push_back("\tchar* " + structRetorno.conteudo + "=(char*)malloc(50*sizeof(char));\n");
+		} else {
+			bufferDeclaracoes.push_back("\tchar* " + structRetorno.conteudo + "=(char*)malloc(" + to_string(tamanhoString) + "*sizeof(char));\n");
+		}
+
+		structRetorno.codigo = "\tstrcpy(" + structRetorno.conteudo + "," + elemento.codigo + ");\n";
+		structRetorno.tamanho = elemento.tamanho;
+	} else {
 		bufferDeclaracoes.push_back("\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n");
 		structRetorno.codigo = "\t" + structRetorno.conteudo + "=" + elemento.codigo + ";\n";
 	}
@@ -766,7 +867,14 @@ atributos geraCodigoAtribuicao(atributos elementoUm, atributos elementoDois) {
 
 	if(elementoDois.tipo == tipoAux)
 	{
-		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + elementoDois.conteudo + ";\n";
+		if(tipoAux == "str") {
+			structRetorno.codigo = elementoDois.codigo + "\tstrcpy(" + aux + "," + elementoDois.conteudo + ");\n";
+			structRetorno.tamanho = elementoDois.tamanho;
+			adicionaTamanho(elementoUm.codigo, mapAtual, elementoDois.tamanho);
+		} else {
+			structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + elementoDois.conteudo + ";\n";
+		}
+		
 		structRetorno.conteudo = aux;
 		structRetorno.tipo = "ope";
 	}
@@ -884,6 +992,30 @@ string pegaTipo(string variavel, int mapBusca) {
 		}
 		else {
 			return (pilhaMaps[mapBusca])[variavel].tipo;
+		}
+		yyerror("Erro na função de verificação do ID");
+	}
+	yyerror("Erro na função de verificação do ID");
+}
+
+string pegaTamanho(string variavel, int mapBusca) {
+	if(mapBusca == 0) {
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+
+		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			yyerror("Variavel \""+ variavel +"\" não declarada");
+		} else {
+			return (pilhaMaps[mapBusca])[variavel].tamanho;
+		}
+		yyerror("Erro na função de verificação do ID");
+	} else {
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+
+		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			return pegaTamanho(variavel, mapBusca - 1);
+		}
+		else {
+			return (pilhaMaps[mapBusca])[variavel].tamanho;
 		}
 		yyerror("Erro na função de verificação do ID");
 	}
@@ -1082,3 +1214,20 @@ void checaLoopsPossiveis(int quantosLoops) {
 		yyerror("Não é possivel realizar essa operação nessa quantidade de loops");
 	}
 }
+
+atributos geraCodigoOperadorTamanho(atributos exprecao) {
+	atributos structRetorno;
+
+	structRetorno.tipo = "int";
+	structRetorno.conteudo = criaVariavelTemp();
+
+	if(exprecao.tipo == "str") {
+		bufferDeclaracoes.push_back("\tint " + structRetorno.conteudo + ";\n");
+		structRetorno.codigo = "\t" + structRetorno.conteudo + "=" + exprecao.tamanho + ";\n";
+	} else {
+		yyerror("operador len só existe para strings");
+	}
+
+	return structRetorno;
+}
+

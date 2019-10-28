@@ -1,5 +1,10 @@
 %{
   #include <string>
+  #include <iostream>
+  char* bufferStr = (char*)malloc(sizeof(char)*50);
+  int tamBuffer = 50;
+  int auxEscala = 4;
+  int tamAtual = 0;
 %}
 
 ALPHANUM [0-1a-zA-Z]
@@ -18,19 +23,22 @@ ATR "+="|"-="|"*="|"/="|"%="
 REL ">"|"<"|"=="|"!="|"<="|">="
 PARA "("|")"|"{"|"}"
 DI ,|;
-
-%x strAs
-
+STRAS \"([^\\\"]|\\.)*\"
+STRAP '([^\\']|\\.)*'
 %%
 
 "\n"             { numeroLinhas++; }
 [ ]+             {}
 [\t]+            {}
 
-"int"            { yylval.codigo = yytext; yylval.tipo = "t_int"; return TK_TIPO_INT;}
-"float"          { yylval.codigo = yytext; yylval.tipo = "t_float"; return TK_TIPO_FLOAT;}
-"double"         { yylval.codigo = yytext; yylval.tipo = "t_double"; return TK_TIPO_DOUBLE;}
-"bool"           { yylval.codigo = "int"; yylval.tipo = "t_bool"; return TK_TIPO_BOOL;}
+{STRAS}          { yylval.codigo = yytext; yylval.tipo = "str"; yylval.tamanho = to_string(yyleng - 2);return TK_STR;}
+
+"int"            { yylval.codigo = yytext; yylval.tipo = "t_int"; return TK_TIPO_INT; }
+"float"          { yylval.codigo = yytext; yylval.tipo = "t_float"; return TK_TIPO_FLOAT; }
+"double"         { yylval.codigo = yytext; yylval.tipo = "t_double"; return TK_TIPO_DOUBLE; }
+"bool"           { yylval.codigo = "int"; yylval.tipo = "t_bool"; return TK_TIPO_BOOL; }
+"str"            { yylval.codigo = "char*"; yylval.tipo = "t_str"; return TK_TIPO_STR; }
+".len"           { yylval.codigo = "len"; yylval.tipo = "ope_len"; return TK_OP_LEN; }
 
 "input"          { return TK_INPUT; }
 "output"         { return TK_OUTPUT; }
@@ -54,7 +62,7 @@ DI ,|;
 {INT}            { yylval.codigo = yytext; yylval.tipo = "int"; return TK_INT; }
 {FLOAT}          { yylval.codigo = yytext; yylval.tipo = "float"; return TK_FLOAT; }
 {BOOL}           { yylval.codigo = yytext; yylval.tipo = "bool"; return TK_BOOL; }
-{ID}             { yylval.codigo = yytext; yylval.tipo = "id"; return TK_ID; }
+{ID}             { yylval.conteudo = ""; yylval.codigo = yytext; yylval.tipo = "id"; return TK_ID; }
 
 [(){}[\];,]	     { return *yytext; }
 
