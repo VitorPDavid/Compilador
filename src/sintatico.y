@@ -31,15 +31,30 @@ typedef struct {
 	string tamanho;
 } caracteristicas;
 
+typedef struct {
+	string temporaria;
+	string temporariaDefault;
+	string tipo;
+} informacoesSwitch;
+
+
 int ProxVariavelTemp = 0;
 int numeroLinhas = 1;
 int proxLabelLoop = 0;
 int proxLabel = 0;
-int mapAtual = -1;
+
 
 vector<string> bufferDeclaracoes;
+
+
+int mapAtual = -1;
 vector< unordered_map<string, caracteristicas> > pilhaMaps;
 vector< flagsBloco > pilhaFlagsBlocos;
+
+
+int informacoesSwitchAtual = -1;
+vector< informacoesSwitch > pilhaInformacoesSwitch;
+
 
 string criaInstanciaTabela(string, string = "", string = "0");
 void criaFlagLoop(string&, string&, string&);
@@ -48,10 +63,11 @@ string criaFlag(void);
 void yyerror(string);
 int yylex(void);
 
-void inicializaPilhaBlocoAtual();
+void inicializaFlagsDaPilhaDeBloco();
 
 string regraCoercao(string, string, string);
 void checaLoopsPossiveis(int);
+int calculaTamanhoMaximoString(int);
 
 //TODO refatorar ? fazem a mesma busca.
 string verificaExistencia(string, int);
@@ -62,6 +78,10 @@ string pegaTipo(string, int);
 void imprimeBuffers(void);
 void adicionaNoMap(void);
 void retiraDoMap(void);
+
+void atualizaTipoInformacoesSwitch(string);
+void empilhaInformacoesSwitch(void);
+void retiraInformacoesSwitch(void);
 
 atributos geraCodigoOperacoes(atributos, atributos, string );
 atributos geraCodigoCoercaoExplicita(atributos , string );
@@ -83,13 +103,17 @@ atributos geraCodigoAtribuicaoComposta(atributos, atributos, string);
 atributos geraCodigoParaMultiploOutput(atributos, atributos);
 atributos geraCodigoParaMultiploInput(atributos, atributos);
 atributos geraCodigoOperadorTamanho(atributos);
+void geraCodigoDeclaracaoString(string, int);
+atributos geraCodigoSwitch(atributos, atributos, atributos);
+atributos geraCodigoCase(atributos, atributos);
+atributos geraCodigoDefault(atributos);
 
 %}
 
 %token TK_INT TK_FLOAT TK_EXP TK_OCTAL TK_HEX TK_BOOL TK_STR
 %token TK_TIPO_INT TK_TIPO_BOOL TK_TIPO_DOUBLE TK_TIPO_FLOAT TK_TIPO_STR
-%token TK_IF TK_ELSE TK_INPUT TK_OUTPUT TK_WHILE TK_FOR TK_CONTINUE TK_BREAK
-%token TK_ID TK_REL TK_LOGI TK_NOT TK_ATR TK_OP_LEN
+%token TK_IF TK_ELSE TK_INPUT TK_OUTPUT TK_WHILE TK_FOR TK_CONTINUE TK_BREAK TK_SWITCH
+%token TK_ID TK_REL TK_LOGI TK_NOT TK_ATR TK_OP_LEN TK_CASE TK_DEFAULT
 %token TK_FIM_LINHA TK_ESPACE TK_TABULACAO
 %token TK_FIM TK_ERROR
 
@@ -142,7 +166,7 @@ BLOCO_LOOP	: AUXBLOCOLO '{' COMANDOS '}'
 AUXBLOCOLO	: 
 			{
 				adicionaNoMap();
-				inicializaPilhaBlocoAtual();
+				inicializaFlagsDaPilhaDeBloco();
 				$$.codigo = "";
 			}
 			;
@@ -166,6 +190,56 @@ CONDI_ELSE  : CONDI_IF TK_ELSE BLOCO
 			| CONDI_IF TK_ELSE COMANDO
 			{
 				$$ = geraCodigoElse($1, $3);
+			}
+			;
+
+SWITCH		: AUX_SWITCH TK_SWITCH '(' AUX_E_SWI ')' '{' CASES '}'
+			{
+				atributos defaul;
+				defaul.codigo = "";
+				$$ = geraCodigoSwitch($4, $7, defaul);
+				retiraInformacoesSwitch();
+			}
+			| AUX_SWITCH TK_SWITCH '(' AUX_E_SWI ')' '{' CASES DEFAULT '}'
+			{
+				$$ = geraCodigoSwitch($4, $7, $8);
+				retiraInformacoesSwitch();
+			}
+			;
+
+AUX_E_SWI	: E
+			{
+				$$ = $1;
+				atualizaTipoInformacoesSwitch($1.tipo);
+			}
+			;
+
+AUX_SWITCH	:
+			{
+				empilhaInformacoesSwitch();
+			}
+			;
+
+DEFAULT		: TK_DEFAULT BLOCO_LOOP
+			{
+				$$ = geraCodigoDefault($2);
+			}
+			;
+
+CASE		: TK_CASE '(' E ')' BLOCO_LOOP
+			{
+				$$ = geraCodigoCase($3, $5);
+				retiraDoMap();
+			}
+			;
+
+CASES		: CASE CASES
+			{
+				$$.codigo = $1.codigo + $2.codigo;
+			}
+			| 
+			{
+				$$.codigo="";
 			}
 			;
 
@@ -272,6 +346,10 @@ COMANDO 	: E ';'
 				$$ = $1;
 			}
 			| FOR
+			{
+				$$ = $1;
+			}
+			| SWITCH
 			{
 				$$ = $1;
 			}
@@ -450,15 +528,14 @@ E 			: E '+' E
 			{
 				$$.conteudo = verificaExistencia($1.codigo, mapAtual);
 				string tipo = pegaTipo($1.codigo, mapAtual);
-				string tamanho = pegaTamanho($1.codigo, mapAtual);
 				$$.tipo = tipo;
+				$$.codigo = "";
 				if (tipo == "str") {
+					string tamanho = pegaTamanho($1.codigo, mapAtual);
 					$$.tamanho = tamanho;
 				} else {
 					$$.tamanho = "";
 				}
-				$$.codigo = "";
-				cout << $$.conteudo << $$.tipo << tamanho << endl;
 			}
 			| E TK_LOGI E
 			{
@@ -474,7 +551,6 @@ E 			: E '+' E
 			}
 			| E TK_OP_LEN '(' ')' 
 			{
-				cout << $1.tamanho << endl;
 				$$ = geraCodigoOperadorTamanho($1);
 			}
 			;
@@ -570,6 +646,30 @@ void adicionaTamanho(string variavel, int mapBusca, string tamanho) {
 	}
 }
 
+string pegaTamanho(string variavel, int mapBusca) {
+	if(mapBusca == 0) {
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+
+		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			yyerror("Variavel \""+ variavel +"\" não declarada");
+		} else {
+			return (pilhaMaps[mapBusca])[variavel].tamanho;
+		}
+		yyerror("Erro na função de verificação do ID");
+	} else {
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+
+		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			return pegaTamanho(variavel, mapBusca - 1);
+		}
+		else {
+			return (pilhaMaps[mapBusca])[variavel].tamanho;
+		}
+		yyerror("Erro na função de verificação do ID");
+	}
+	yyerror("Erro na função de verificação do ID");
+}
+
 string criaInstanciaTabela(string variavel, string tipo, string tamanho) {
 	// unordered_map<string, caracteristicas> table = (pilhaMaps[mapAtual]);
 
@@ -588,11 +688,7 @@ string criaInstanciaTabela(string variavel, string tipo, string tamanho) {
 		{
 			int tamanhoString = stoi(tamanho);
 			
-			if (tamanhoString < 50) {
-				bufferDeclaracoes.push_back("\tchar* " + novaVariavel.temporaria + "=(char*)malloc(50*sizeof(char));\n");
-			} else {
-				bufferDeclaracoes.push_back("\tchar* " + novaVariavel.temporaria + "=(char*)malloc(" + to_string(tamanhoString) + "*sizeof(char));\n");
-			}
+			geraCodigoDeclaracaoString(novaVariavel.temporaria, tamanhoString);
 
 			novaVariavel.tamanho = tamanho;
 		} else
@@ -626,7 +722,7 @@ string regraCoercao(string tipoUm, string tipoDois, string operador) {
 			return string("erro");
 		} 
 		else if (tipoUm == string("str") || tipoDois == string("str")) {
-			yyerror(string("String ainda n tem operadores"));
+			yyerror(string("Para realizar operações com string utilize as funções basicas."));
 			return string("erro");
 		}
 		else if(tipoUm == string("double") || tipoDois == string("double"))
@@ -697,11 +793,8 @@ atributos geraCodigoOperacoes(atributos elementoUm, atributos elementoDois, stri
 		if (structRetorno.tipo == "str") {
 			int tamanhoString = stoi(elementoUm.tamanho) + stoi(elementoDois.tamanho);
 			// TODO Refatorar isso
-			if (tamanhoString < 50) {
-			bufferDeclaracoes.push_back("\tchar* " + structRetorno.conteudo + "=(char*)malloc(50*sizeof(char));\n");
-			} else {
-				bufferDeclaracoes.push_back("\tchar* " + structRetorno.conteudo + "=(char*)malloc(" + to_string(tamanhoString) + "*sizeof(char));\n");
-			}
+			geraCodigoDeclaracaoString(structRetorno.conteudo, tamanhoString);
+
 			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\tstrcpy(" + structRetorno.conteudo + "," + elementoUm.conteudo + ");\n";
 			structRetorno.codigo += "\tstrcat(" + structRetorno.conteudo + "," + elementoDois.conteudo + ");\n";
 			structRetorno.tamanho = to_string(tamanhoString);
@@ -731,6 +824,22 @@ atributos geraCodigoOperacoes(atributos elementoUm, atributos elementoDois, stri
 	}
 
 	return structRetorno;
+}
+
+void geraCodigoDeclaracaoString(string variavel, int tamanhoString) {
+	
+	int tamanhoDeclaracao = calculaTamanhoMaximoString(tamanhoString);
+
+	bufferDeclaracoes.push_back("\tchar* " + variavel + "=(char*)malloc(" + to_string(tamanhoDeclaracao) + "*sizeof(char));\n");
+}
+
+int calculaTamanhoMaximoString(int tamanhoString) {
+	int escala = 4;
+	int tamanhoEscala = 50;
+
+	for(tamanhoEscala = 50; tamanhoEscala < tamanhoString; tamanhoEscala *= escala, escala *= escala);
+
+	return tamanhoEscala;
 }
 
 atributos geraCodigoCoercaoExplicita(atributos elemento, string tipo) {
@@ -842,11 +951,7 @@ atributos geraCodigoValores(atributos elemento) {
 		int tamanhoString = stoi(elemento.tamanho);
 
 		// TODO Refatorar isso
-		if (tamanhoString < 50) {
-			bufferDeclaracoes.push_back("\tchar* " + structRetorno.conteudo + "=(char*)malloc(50*sizeof(char));\n");
-		} else {
-			bufferDeclaracoes.push_back("\tchar* " + structRetorno.conteudo + "=(char*)malloc(" + to_string(tamanhoString) + "*sizeof(char));\n");
-		}
+		geraCodigoDeclaracaoString(structRetorno.conteudo, tamanhoString);
 
 		structRetorno.codigo = "\tstrcpy(" + structRetorno.conteudo + "," + elemento.codigo + ");\n";
 		structRetorno.tamanho = elemento.tamanho;
@@ -864,11 +969,20 @@ atributos geraCodigoAtribuicao(atributos elementoUm, atributos elementoDois) {
 	string aux = verificaExistencia(elementoUm.codigo, mapAtual);
 	
 	string tipoAux = pegaTipo(elementoUm.codigo, mapAtual);
-
 	if(elementoDois.tipo == tipoAux)
 	{
 		if(tipoAux == "str") {
-			structRetorno.codigo = elementoDois.codigo + "\tstrcpy(" + aux + "," + elementoDois.conteudo + ");\n";
+			int tamanhoElementoUm = stoi(pegaTamanho(elementoUm.codigo, mapAtual));
+			int tamanhoDeclaracao = calculaTamanhoMaximoString(tamanhoElementoUm);
+			
+			if(tamanhoDeclaracao < stoi(elementoDois.tamanho)) {
+				int novoTamanho = calculaTamanhoMaximoString(stoi(elementoDois.tamanho));
+				structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=(char*)realloc(" + aux + ", sizeof(char)*" + to_string(novoTamanho) + ");\n";
+				structRetorno.codigo += "\tstrcpy(" + aux + "," + elementoDois.conteudo + ");\n";
+			} else {
+				structRetorno.codigo = elementoDois.codigo + "\tstrcpy(" + aux + "," + elementoDois.conteudo + ");\n";
+			}
+			TESTE
 			structRetorno.tamanho = elementoDois.tamanho;
 			adicionaTamanho(elementoUm.codigo, mapAtual, elementoDois.tamanho);
 		} else {
@@ -992,30 +1106,6 @@ string pegaTipo(string variavel, int mapBusca) {
 		}
 		else {
 			return (pilhaMaps[mapBusca])[variavel].tipo;
-		}
-		yyerror("Erro na função de verificação do ID");
-	}
-	yyerror("Erro na função de verificação do ID");
-}
-
-string pegaTamanho(string variavel, int mapBusca) {
-	if(mapBusca == 0) {
-		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
-
-		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
-			yyerror("Variavel \""+ variavel +"\" não declarada");
-		} else {
-			return (pilhaMaps[mapBusca])[variavel].tamanho;
-		}
-		yyerror("Erro na função de verificação do ID");
-	} else {
-		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
-
-		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
-			return pegaTamanho(variavel, mapBusca - 1);
-		}
-		else {
-			return (pilhaMaps[mapBusca])[variavel].tamanho;
 		}
 		yyerror("Erro na função de verificação do ID");
 	}
@@ -1146,7 +1236,7 @@ atributos geraCodigoFor(atributos exprecaoUm, atributos exprecaoDois, atributos 
 	return structRetorno;
 }
 
-void inicializaPilhaBlocoAtual(void) {
+void inicializaFlagsDaPilhaDeBloco(void) {
 	string flagInicio, flagFim, flagContadorFor;
 
 	criaFlagLoop(flagInicio, flagFim, flagContadorFor);
@@ -1231,3 +1321,111 @@ atributos geraCodigoOperadorTamanho(atributos exprecao) {
 	return structRetorno;
 }
 
+void empilhaInformacoesSwitch(void) {
+	informacoesSwitch infos;
+	infos.temporaria = criaVariavelTemp();
+	
+	infos.temporariaDefault = criaVariavelTemp();
+	bufferDeclaracoes.push_back("\tint " + infos.temporariaDefault + ";\n");
+	
+	pilhaInformacoesSwitch.push_back(infos);
+
+	informacoesSwitchAtual++;
+}
+
+void retiraInformacoesSwitch(void) {
+	pilhaInformacoesSwitch.pop_back();
+	
+	informacoesSwitchAtual--;
+}
+
+void atualizaTipoInformacoesSwitch(string tipo) {
+
+	pilhaInformacoesSwitch[informacoesSwitchAtual].tipo = tipo;
+	if(tipo == "bool")
+		bufferDeclaracoes.push_back("\tint" + pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria + ";\n");
+	else if(tipo == "string")
+		cout << "TODO" << endl;
+	else
+		bufferDeclaracoes.push_back("\t" + tipo + " " + pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria + ";\n");
+}
+
+atributos geraCodigoSwitch(atributos exprecao, atributos cases, atributos defaul) {
+	atributos structRetorno;
+
+	structRetorno.tipo = "";
+	structRetorno.tamanho = "";
+	structRetorno.conteudo = "";
+
+	string temporaria = pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria;
+	string temporariaDefault = pilhaInformacoesSwitch[informacoesSwitchAtual].temporariaDefault;
+
+	structRetorno.codigo = exprecao.codigo + "\t" + temporaria + "=" + exprecao.conteudo + ";\n";
+	structRetorno.codigo += "\t" + temporariaDefault + "=false;\n" + cases.codigo;
+
+	if(defaul.codigo != "") {
+		structRetorno.codigo += defaul.codigo;
+	}
+
+	return structRetorno;
+}
+
+atributos geraCodigoCase(atributos exprecao, atributos bloco) {
+	atributos structRetorno;
+	
+	string auxCondicao = criaVariavelTemp();
+	bufferDeclaracoes.push_back("\tint " + auxCondicao + ";\n");
+	
+	structRetorno.tipo = "";
+	structRetorno.tamanho = "";
+	structRetorno.conteudo = auxCondicao;
+
+	string temporariaSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria;
+	string tipoTempSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].tipo;
+
+	if(tipoTempSwitch == exprecao.tipo) {
+		if(exprecao.tipo != "string")
+			structRetorno.codigo = exprecao.codigo + "\t" + auxCondicao + "=" + exprecao.conteudo + "==" + temporariaSwitch + ";\n\t" + auxCondicao + "=!" + auxCondicao + ";\n";
+		else
+			structRetorno.codigo = exprecao.codigo + "\t" + auxCondicao + "= strcmp(" + exprecao.conteudo + "," + temporariaSwitch + ");\n\t" + auxCondicao + "=!" + auxCondicao + ";\n"; // TODO verificar o strcmp
+	} else {
+		string tipoCoercao = regraCoercao(tipoTempSwitch, exprecao.tipo, "==");
+		string codigoCoercao;
+
+		string variavelCoercao = criaVariavelTemp();
+		bufferDeclaracoes.push_back("\t" + tipoCoercao + " " + variavelCoercao + ";\n");
+		
+		
+		if(exprecao.tipo != tipoCoercao)
+		{	
+			codigoCoercao = "\t" + variavelCoercao + "=(" + tipoCoercao + ")" + exprecao.conteudo + ";\n";
+			structRetorno.codigo = exprecao.codigo + codigoCoercao + "\t" + auxCondicao + "=" + exprecao.conteudo + "==" + variavelCoercao + ";\n";
+		}
+		else if(tipoTempSwitch != tipoCoercao)
+		{
+			codigoCoercao = "\t" + variavelCoercao + "=(" + tipoCoercao + ")" + temporariaSwitch + ";\n";
+			structRetorno.codigo = exprecao.codigo + codigoCoercao +"\t" + auxCondicao + "=" + exprecao.conteudo + "==" + variavelCoercao + ";\n";
+		}
+	}
+	
+	string auxFlag = criaFlag();
+	
+	structRetorno.codigo += "\tif(" + auxCondicao + ")\n\t  goto " + auxFlag + ";\n";
+	structRetorno.codigo += "\t" + pilhaInformacoesSwitch[informacoesSwitchAtual].temporariaDefault + "=true;\n";
+	structRetorno.codigo += bloco.codigo + auxFlag + ":\n";
+
+	return structRetorno;
+}
+
+atributos geraCodigoDefault(atributos bloco) {
+	atributos structRetorno;
+
+	structRetorno.conteudo = "";
+	structRetorno.tipo = "";
+	structRetorno.tamanho = "";
+	
+	string auxFlag = criaFlag();
+	structRetorno.codigo += "\tif(" + pilhaInformacoesSwitch[informacoesSwitchAtual].temporariaDefault + ")\n\t  goto " + auxFlag + ";\n" + bloco.codigo + auxFlag + ":\n";
+
+	return structRetorno;
+}

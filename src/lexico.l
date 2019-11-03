@@ -43,6 +43,9 @@ STRAP '([^\\']|\\.)*'
 "input"          { return TK_INPUT; }
 "output"         { return TK_OUTPUT; }
 
+"switch"         { return TK_SWITCH; }
+"case"           { return TK_CASE; }
+"default"        { return TK_DEFAULT; }
 "while"          { return TK_WHILE; }
 "for"            { return TK_FOR; }
 "continue"       { return TK_CONTINUE; }
