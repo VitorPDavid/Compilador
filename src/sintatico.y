@@ -33,8 +33,8 @@ typedef struct {
 
 typedef struct {
 	string temporaria;
-	string temporariaDefault;
 	string tipo;
+	string flagFim;
 } informacoesSwitch;
 
 
@@ -220,13 +220,13 @@ AUX_SWITCH	:
 			}
 			;
 
-DEFAULT		: TK_DEFAULT BLOCO_LOOP
+DEFAULT		: TK_DEFAULT BLOCO
 			{
 				$$ = geraCodigoDefault($2);
 			}
 			;
 
-CASE		: TK_CASE '(' E ')' BLOCO_LOOP
+CASE		: TK_CASE '(' E ')' BLOCO
 			{
 				$$ = geraCodigoCase($3, $5);
 				retiraDoMap();
@@ -1325,8 +1325,7 @@ void empilhaInformacoesSwitch(void) {
 	informacoesSwitch infos;
 	infos.temporaria = criaVariavelTemp();
 	
-	infos.temporariaDefault = criaVariavelTemp();
-	bufferDeclaracoes.push_back("\tint " + infos.temporariaDefault + ";\n");
+	infos.flagFim = criaFlag();
 	
 	pilhaInformacoesSwitch.push_back(infos);
 
@@ -1358,14 +1357,14 @@ atributos geraCodigoSwitch(atributos exprecao, atributos cases, atributos defaul
 	structRetorno.conteudo = "";
 
 	string temporaria = pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria;
-	string temporariaDefault = pilhaInformacoesSwitch[informacoesSwitchAtual].temporariaDefault;
 
-	structRetorno.codigo = exprecao.codigo + "\t" + temporaria + "=" + exprecao.conteudo + ";\n";
-	structRetorno.codigo += "\t" + temporariaDefault + "=false;\n" + cases.codigo;
+	structRetorno.codigo = exprecao.codigo + "\t" + temporaria + "=" + exprecao.conteudo + ";\n" + cases.codigo;
 
 	if(defaul.codigo != "") {
 		structRetorno.codigo += defaul.codigo;
 	}
+
+	structRetorno.codigo += pilhaInformacoesSwitch[informacoesSwitchAtual].flagFim + ":\n";
 
 	return structRetorno;
 }
@@ -1380,8 +1379,8 @@ atributos geraCodigoCase(atributos exprecao, atributos bloco) {
 	structRetorno.tamanho = "";
 	structRetorno.conteudo = auxCondicao;
 
-	string temporariaSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria;
 	string tipoTempSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].tipo;
+	string temporariaSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria;
 
 	if(tipoTempSwitch == exprecao.tipo) {
 		if(exprecao.tipo != "string")
@@ -1394,7 +1393,6 @@ atributos geraCodigoCase(atributos exprecao, atributos bloco) {
 
 		string variavelCoercao = criaVariavelTemp();
 		bufferDeclaracoes.push_back("\t" + tipoCoercao + " " + variavelCoercao + ";\n");
-		
 		
 		if(exprecao.tipo != tipoCoercao)
 		{	
@@ -1409,10 +1407,10 @@ atributos geraCodigoCase(atributos exprecao, atributos bloco) {
 	}
 	
 	string auxFlag = criaFlag();
-	
 	structRetorno.codigo += "\tif(" + auxCondicao + ")\n\t  goto " + auxFlag + ";\n";
-	structRetorno.codigo += "\t" + pilhaInformacoesSwitch[informacoesSwitchAtual].temporariaDefault + "=true;\n";
-	structRetorno.codigo += bloco.codigo + auxFlag + ":\n";
+	
+	string flagFinalSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].flagFim;
+	structRetorno.codigo += bloco.codigo + "\tgoto " + flagFinalSwitch + ";\n" + auxFlag + ":\n";
 
 	return structRetorno;
 }
@@ -1424,8 +1422,7 @@ atributos geraCodigoDefault(atributos bloco) {
 	structRetorno.tipo = "";
 	structRetorno.tamanho = "";
 	
-	string auxFlag = criaFlag();
-	structRetorno.codigo += "\tif(" + pilhaInformacoesSwitch[informacoesSwitchAtual].temporariaDefault + ")\n\t  goto " + auxFlag + ";\n" + bloco.codigo + auxFlag + ":\n";
+	structRetorno.codigo = bloco.codigo;
 
 	return structRetorno;
 }
