@@ -107,6 +107,10 @@ void geraCodigoDeclaracaoString(string, int);
 atributos geraCodigoSwitch(atributos, atributos, atributos);
 atributos geraCodigoCase(atributos, atributos);
 atributos geraCodigoDefault(atributos);
+void geraCodigoCoercao(atributos&, atributos&, atributos&, string);
+string geraCodigoCoercaoStringToInt(string, string, string);
+string geraCodigoErroExecucao(string, string="0");
+string geraCodigoCoercaoStringToFloat(string, string, string);
 
 %}
 
@@ -721,9 +725,13 @@ string regraCoercao(string tipoUm, string tipoDois, string operador) {
 			yyerror(string("Operador dessa linha não aceita tipo booleano"));
 			return string("erro");
 		} 
-		else if (tipoUm == string("str") || tipoDois == string("str")) {
-			yyerror(string("Para realizar operações com string utilize as funções basicas."));
-			return string("erro");
+		else if (tipoUm == string("str") && (tipoDois == "float" || tipoDois == "double" || tipoDois == "int")) {
+			// yyerror(string("Para realizar operações com string utilize as funções basicas."));
+			// return string("erro");
+			return tipoDois;
+		}
+		else if (tipoDois == string("str") && (tipoUm == "float" || tipoUm == "double" || tipoUm == "int")) {
+			return tipoUm;
 		}
 		else if(tipoUm == string("double") || tipoDois == string("double"))
 		{
@@ -805,22 +813,7 @@ atributos geraCodigoOperacoes(atributos elementoUm, atributos elementoDois, stri
 	}
 	else
 	{
-		string tipo = regraCoercao(elementoUm.tipo,elementoDois.tipo,string("+"));
-		string variavelCoercao = criaVariavelTemp();
-		string codigoCoercao;
-		structRetorno.tipo = tipo;
-		bufferDeclaracoes.push_back("\t" + tipo + " " + structRetorno.conteudo + ";\n");
-		bufferDeclaracoes.push_back("\t" + tipo + " " + variavelCoercao + ";\n");
-		if(elementoUm.tipo != tipo)
-		{
-			codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + elementoUm.conteudo + ";\n";
-			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao + "\t" + structRetorno.conteudo + "=" + variavelCoercao + operacao + elementoDois.conteudo + ";\n";
-		}
-		else if(elementoDois.tipo != tipo)
-		{
-			codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + elementoDois.conteudo + ";\n";
-			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao +"\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + variavelCoercao + ";\n";
-		}
+		geraCodigoCoercao(structRetorno, elementoUm, elementoDois, operacao);
 	}
 
 	return structRetorno;
@@ -1425,4 +1418,172 @@ atributos geraCodigoDefault(atributos bloco) {
 	structRetorno.codigo = bloco.codigo;
 
 	return structRetorno;
+}
+
+void geraCodigoCoercao(atributos& structRetorno, atributos& elementoUm, atributos& elementoDois, string operacao) {
+	
+	string tuplaCoercaoOrigem[3];
+	string tuplaCoercaoDestino[2];
+
+	tuplaCoercaoDestino[0] = regraCoercao(elementoUm.tipo, elementoDois.tipo, operacao);
+		
+	string variavelRecebeCoercao = criaVariavelTemp();	
+	string codigoCoercao;
+
+	structRetorno.tipo = tuplaCoercaoDestino[0];
+
+	bufferDeclaracoes.push_back("\t" + tuplaCoercaoDestino[0] + " " + structRetorno.conteudo + ";\n");
+	bufferDeclaracoes.push_back("\t" + tuplaCoercaoDestino[0] + " " + variavelRecebeCoercao + ";\n");
+
+	if(tuplaCoercaoDestino[0] == elementoUm.tipo) {
+		tuplaCoercaoOrigem[0] = elementoDois.tipo;
+		tuplaCoercaoOrigem[1] = elementoDois.conteudo;
+		tuplaCoercaoOrigem[2] = elementoDois.tamanho;
+
+		tuplaCoercaoDestino[1] = elementoUm.conteudo;
+	} else {
+		tuplaCoercaoOrigem[0] = elementoUm.tipo;
+		tuplaCoercaoOrigem[1] = elementoUm.conteudo;
+		tuplaCoercaoOrigem[2] = elementoUm.tamanho;
+
+		tuplaCoercaoDestino[1] = elementoDois.conteudo;
+	}
+	
+	if(tuplaCoercaoOrigem[0] == "str") {
+		if(tuplaCoercaoDestino[0] == "int") {
+			codigoCoercao = geraCodigoCoercaoStringToInt(variavelRecebeCoercao, tuplaCoercaoOrigem[1], tuplaCoercaoOrigem[2]);
+		}
+		else if(tuplaCoercaoDestino[0] == "float") {
+			codigoCoercao = geraCodigoCoercaoStringToFloat(variavelRecebeCoercao, tuplaCoercaoOrigem[1], tuplaCoercaoOrigem[2]);
+		}
+	} else if(tuplaCoercaoDestino[0] == "bool") {
+		codigoCoercao = "\t" + variavelRecebeCoercao + "=(int)" + tuplaCoercaoOrigem[1] + ";\n";
+	} else {
+		codigoCoercao = "\t" + variavelRecebeCoercao + "=(" + tuplaCoercaoDestino[0] + ")" + tuplaCoercaoOrigem[1] + ";\n";
+	}
+
+	structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao + "\t" + structRetorno.conteudo + "=" + variavelRecebeCoercao + operacao + tuplaCoercaoDestino[1] + ";\n";
+}
+
+string geraCodigoCoercaoStringToInt(string variavelRecebeCoercao, string variavelParaCoercao, string tamanho) {
+	
+	string codigoCoercao = "// ------------Codigo de coercao string------------\n";
+
+	string temporarialCondicaoSinal = criaVariavelTemp();
+	string temporarialComparacaoChar = criaVariavelTemp();
+	string temporariaSinal = criaVariavelTemp();
+	string temporariaPosicao = criaVariavelTemp();
+
+	bufferDeclaracoes.push_back("\tint " + temporarialCondicaoSinal + ";\n");
+	bufferDeclaracoes.push_back("\tchar " + temporarialComparacaoChar + ";\n");
+	bufferDeclaracoes.push_back("\tint " + temporariaSinal + ";\n");
+	bufferDeclaracoes.push_back("\tint " + temporariaPosicao + ";\n");
+
+	string flagCondiSinal = criaFlag();
+	string flagCondiElseSinal = criaFlag();
+
+	codigoCoercao += "\t" + variavelRecebeCoercao + "=0;\n";
+	codigoCoercao += "\t" + temporariaPosicao + "=0;\n";
+	codigoCoercao += "\t" + temporariaSinal + "=1;\n";
+
+	codigoCoercao += "\t" + temporarialComparacaoChar + "=" + variavelParaCoercao + "[" + temporariaPosicao + "];\n";
+	codigoCoercao += "\t" + temporarialCondicaoSinal + "=" + temporarialComparacaoChar + "==" + "'-'" + ";\n";
+	codigoCoercao += "\t" + temporarialCondicaoSinal + "=!" + temporarialCondicaoSinal + ";\n";
+	
+	codigoCoercao += "\tif(" + temporarialCondicaoSinal + ") goto " + flagCondiSinal + ";\n";
+	codigoCoercao += "\t" + temporariaSinal + "=-1;\n";
+	codigoCoercao += "\t" + temporariaPosicao + "=" + temporariaPosicao + " + 1;\n";
+	codigoCoercao += "\tgoto " + flagCondiElseSinal + ";\n";
+	codigoCoercao += flagCondiSinal + ":\n";
+
+	codigoCoercao += "\t" + temporarialComparacaoChar + "=" + variavelParaCoercao + "[" + temporariaPosicao + "];\n";
+	codigoCoercao += "\t" + temporarialCondicaoSinal + "=" + temporarialComparacaoChar + "==" + "'+'" + ";\n";
+	codigoCoercao += "\t" + temporarialCondicaoSinal + "=!" + temporarialCondicaoSinal + ";\n";
+
+	codigoCoercao += "\tif(" + temporarialCondicaoSinal + ") goto " + flagCondiElseSinal + ";\n";
+	codigoCoercao += "\t" + temporariaPosicao + "=" + temporariaPosicao + " + 1;\n";
+	codigoCoercao += flagCondiElseSinal + ":\n";
+
+	string temporariaCondicao = criaVariavelTemp();
+	bufferDeclaracoes.push_back("\tint " + temporariaCondicao + ";\n");
+
+	string flagInicio, flagFim, flagContadorFor;
+
+	criaFlagLoop(flagInicio, flagFim, flagContadorFor);
+
+	codigoCoercao += "\t" + temporariaCondicao + "=" + temporariaPosicao + ";\n";
+	codigoCoercao += "\tgoto " + flagContadorFor + ";\n" + flagInicio + ":\n";
+	codigoCoercao += "\t" + temporariaCondicao + "=" + temporariaCondicao + "+1;\n" + flagContadorFor + ":\n";
+
+	codigoCoercao += "\t" + temporarialCondicaoSinal + "=" + temporariaCondicao + "<" + tamanho + ";\n";
+	codigoCoercao += "\t" + temporarialCondicaoSinal + "=!" + temporarialCondicaoSinal + ";\n";
+	codigoCoercao += "\tif(" + temporarialCondicaoSinal + ") goto " + flagFim + ";\n";
+
+	string temporariaIfComZero = criaVariavelTemp();
+	string temporariaIfComNove = criaVariavelTemp();
+	bufferDeclaracoes.push_back("\tchar " + temporariaIfComZero + ";\n");
+	bufferDeclaracoes.push_back("\tchar " + temporariaIfComNove + ";\n"); 
+
+	codigoCoercao += "\t" + temporarialComparacaoChar + "=" + variavelParaCoercao + "[" + temporariaCondicao + "];\n";
+	codigoCoercao += "\t" + temporariaIfComZero + "=" + temporarialComparacaoChar + ">='0';\n";
+	codigoCoercao += "\t" + temporariaIfComNove + "=" + temporarialComparacaoChar + "<='9';\n";
+	
+	string temporariaIfInterno = criaVariavelTemp();
+	string temporariaConta = criaVariavelTemp();
+	string flagIfInterno = criaFlag();
+	bufferDeclaracoes.push_back("\tint " + temporariaConta + ";\n");
+	bufferDeclaracoes.push_back("\tchar " + temporariaIfInterno + ";\n");
+
+	codigoCoercao += "\t" + temporariaIfInterno + "=" + temporariaIfComZero + " && " + temporariaIfComNove + ";\n";
+
+	codigoCoercao += "\t" + temporariaIfInterno + "=!" + temporariaIfInterno + ";\n";
+	codigoCoercao += "\tif(" + temporariaIfInterno + ") goto " + flagIfInterno + ";\n";
+
+	codigoCoercao += "\t" + variavelRecebeCoercao + "=" + variavelRecebeCoercao + "* 10;\n";
+	codigoCoercao += "\t" + temporariaConta + "=" + temporarialComparacaoChar + "- '0';\n";
+	codigoCoercao += "\t" + variavelRecebeCoercao + "=" + variavelRecebeCoercao + "+" + temporariaConta + ";\n";
+
+	
+	codigoCoercao += "\tgoto " + flagInicio + ";\n";
+	codigoCoercao += flagIfInterno + ":\n";
+	codigoCoercao += geraCodigoErroExecucao("A string não pode ser convertida para inteiro");
+	codigoCoercao += "\t" + flagFim + ":\n";
+
+	codigoCoercao += "\t" + variavelRecebeCoercao + "=" + variavelRecebeCoercao + "*" + temporariaSinal + ";\n";
+
+	codigoCoercao += "// ------------Fim Codigo de coercao string------------\n";
+
+	return codigoCoercao;
+}
+
+string geraCodigoErroExecucao(string msg, string codigoErro) {
+	return "\tstd::cout <<\"" + msg + "\"<<std::endl;\n\texit("+ codigoErro + ");\n";
+}
+/*
+atributos structRetorno;
+	
+	structRetorno.tipo = "loop";
+
+	string auxCondicao = criaVariavelTemp();
+	
+	structRetorno.conteudo = auxCondicao;
+
+	bufferDeclaracoes.push_back("\tint " + auxCondicao + ";\n");
+
+	string flagInicio = pilhaFlagsBlocos[mapAtual].flagInicio;
+	string flagFim = pilhaFlagsBlocos[mapAtual].flagFim;
+	string flagContadorFor = pilhaFlagsBlocos[mapAtual].flagContadorFor;
+
+	string tipo = regraCoercao("bool",exprecaoDois.tipo,"=");
+
+	structRetorno.codigo = exprecaoUm.codigo + "\tgoto " + flagContadorFor + ";\n" + flagInicio + ":\n" + exprecaoTres.codigo + flagContadorFor + ":\n";
+
+	structRetorno.codigo += exprecaoDois.codigo + "\t" + auxCondicao + "=" + exprecaoDois.conteudo + ";\n\t" + auxCondicao + "=!" + auxCondicao + ";\n"; 
+
+	structRetorno.codigo += "\tif(" + auxCondicao + ")\n\t  goto " + flagFim + ";\n" + bloco.codigo +"\tgoto " + flagInicio + ";\n" + flagFim + ":\n"; 
+
+	return structRetorno;
+*/
+string geraCodigoCoercaoStringToFloat(string variavelRecebeCoercao, string variavelParaCoercao, string tamanho) {
+
 }
