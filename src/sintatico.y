@@ -34,9 +34,11 @@ typedef struct {
 typedef struct {
 	string temporaria;
 	string tipo;
+	string tamanho;
 	string flagFim;
 } informacoesSwitch;
 
+//TODO AJUSTAR PARA ACEITAR TAMANHO NAS OPERACOES
 
 int ProxVariavelTemp = 0;
 int numeroLinhas = 1;
@@ -44,7 +46,7 @@ int proxLabelLoop = 0;
 int proxLabel = 0;
 
 
-vector<string> bufferDeclaracoes;
+unordered_map<string, string> mapDeclaracoes;
 
 
 int mapAtual = -1;
@@ -618,7 +620,7 @@ string verificaExistencia(string variavel, int mapBusca){
 		yyerror("Erro na função de verificação do ID");
 	} else {
 		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
-		if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+		if( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
 			return verificaExistencia(variavel, mapBusca - 1);
 		}
 		else {
@@ -687,7 +689,7 @@ string criaInstanciaTabela(string variavel, string tipo, string tamanho) {
 		novaVariavel.tipo = tipo;
 
 		if(tipo == "bool")
-			bufferDeclaracoes.push_back("\tint " + novaVariavel.temporaria + ";\n");
+			mapDeclaracoes[novaVariavel.temporaria] = "\tint " + novaVariavel.temporaria + ";\n";
 		else if (tipo == "str")
 		{
 			int tamanhoString = stoi(tamanho);
@@ -696,7 +698,7 @@ string criaInstanciaTabela(string variavel, string tipo, string tamanho) {
 
 			novaVariavel.tamanho = tamanho;
 		} else
-			bufferDeclaracoes.push_back("\t" + tipo + " " + novaVariavel.temporaria + ";\n");
+			mapDeclaracoes[novaVariavel.temporaria] = "\t" + tipo + " " + novaVariavel.temporaria + ";\n";
 
 		(pilhaMaps.back())[variavel] = novaVariavel;
 
@@ -709,80 +711,49 @@ string criaInstanciaTabela(string variavel, string tipo, string tamanho) {
 }
 
 void imprimeBuffers(void) {
-	for (auto declaracao : bufferDeclaracoes)
+	for (auto& declaracao : mapDeclaracoes)
 	{
-		cout << declaracao;
+		cout << declaracao.second;
 	}
 	cout << "\n\n";
 }
 
 string regraCoercao(string tipoUm, string tipoDois, string operador) {
-	if(operador == string("+") || operador == string("-") || operador == string("/") || operador == string("*")
-	|| operador == ">" || operador == "<" || operador == "<=" || operador == ">=")
-	{
-		if(tipoUm == string("bool") || tipoDois == string("bool"))
-		{
+	if(operador == "+" || operador == "-" || operador == "/" || operador == "*"
+	|| operador == ">" || operador == "<" || operador == "<=" || operador == ">="
+	|| operador == "*=" || operador == "/="	|| operador == "+=" || operador == "-="
+	|| operador == "%=" || operador == "==" || operador == "!=" ) {
+		if(tipoUm == "bool" || tipoDois == "bool") {
 			yyerror(string("Operador dessa linha não aceita tipo booleano"));
-			return string("erro");
-		} 
-		else if (tipoUm == string("str") && (tipoDois == "float" || tipoDois == "double" || tipoDois == "int")) {
-			// yyerror(string("Para realizar operações com string utilize as funções basicas."));
-			// return string("erro");
-			return tipoDois;
 		}
-		else if (tipoDois == string("str") && (tipoUm == "float" || tipoUm == "double" || tipoUm == "int")) {
-			return tipoUm;
+		else if(tipoUm == "double" || tipoDois == "double")	{
+			return "double";
 		}
-		else if(tipoUm == string("double") || tipoDois == string("double"))
-		{
-			return string("double");
+		else if(tipoUm == "float" || tipoDois == "float") {
+			return "float";
 		}
-		else if(tipoUm == string("float") || tipoDois == string("float"))
-		{
-			return string("float");
+		else if(tipoUm == "int" || tipoDois == "int") {
+			return "int";
 		}
-	}
-	if(operador == "=")
-	{
-		if(tipoUm == "bool" && tipoDois != "bool" && tipoDois != "int")
-		{
-			yyerror(string("Não é aceito coerção automatica de ") + tipoDois + " para " + tipoUm);
+		return "erro";
+	} else if(operador == "=") {
+		if(tipoUm == "bool" && tipoDois != "bool")	{
+			yyerror("Não é aceito coerção automatica de " + tipoDois + " para " + tipoUm);
 		}
-		else if(tipoUm == "int" && tipoDois != "int")
-		{
-			yyerror(string("Não é aceito coerção automatica de ") + tipoDois + " para " + tipoUm);
+		else if(tipoUm == "int" && tipoDois != "int" && tipoDois != "str") {
+			yyerror("Não é aceito coerção automatica de " + tipoDois + " para " + tipoUm);
 		}
-		else if(tipoUm == "float" && tipoDois== "double")
-		{
-			yyerror(string("Não é aceito coerção automatica de ") + tipoDois + " para " + tipoUm);
+		else if(tipoUm == "float" && tipoDois == "double") {
+			yyerror("Não é aceito coerção automatica de " + tipoDois + " para " + tipoUm);
 		}
 
 		return tipoUm;
-	}
-	if(operador == "==" || operador == "!=")
-	{
-		if(tipoUm == string("bool") || tipoDois == string("bool"))
-		{
-			//TODO ajustar
-			return string("erro");
-		}
-		else if(tipoUm == string("double") || tipoDois == string("double"))
-		{
-			//TODO Colocar warning aqui
-			return string("double");
-		}
-		else if(tipoUm == string("float") || tipoDois == string("float"))
-		{
-			//TODO Colocar warning aqui
-			return string("float");
-		}
-	}
-	if(operador == "or" || operador == "and" || operador == "not") {
+	} else if(operador == "or" || operador == "and" || operador == "not") {
 		if(tipoUm != "bool" || tipoDois != "bool"){
 			yyerror("operações logicas só podem ser feitas entre booleanos.");
-		} else {
-			return "bool";
 		}
+		
+		return "bool";
 	}
 }
 
@@ -791,23 +762,22 @@ atributos geraCodigoOperacoes(atributos elementoUm, atributos elementoDois, stri
 
 	structRetorno.conteudo = criaVariavelTemp();
 
-	// TODO Isso deve ficar aqui ???
 	if(elementoUm.tipo == "bool" || elementoDois.tipo == "bool")
 		yyerror("operação \"" + operacao + "\" não permitida entre bools");
 
 	if(elementoUm.tipo == elementoDois.tipo)
 	{
 		structRetorno.tipo = elementoUm.tipo;
-		if (structRetorno.tipo == "str") {
+		//TODO MAIS OPERACOES COM STRING
+		if (structRetorno.tipo == "str" && operacao == "+") {
 			int tamanhoString = stoi(elementoUm.tamanho) + stoi(elementoDois.tamanho);
-			// TODO Refatorar isso
 			geraCodigoDeclaracaoString(structRetorno.conteudo, tamanhoString);
 
 			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\tstrcpy(" + structRetorno.conteudo + "," + elementoUm.conteudo + ");\n";
 			structRetorno.codigo += "\tstrcat(" + structRetorno.conteudo + "," + elementoDois.conteudo + ");\n";
 			structRetorno.tamanho = to_string(tamanhoString);
 		} else {
-			bufferDeclaracoes.push_back("\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n");
+			mapDeclaracoes[structRetorno.conteudo] = "\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n";
 			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + elementoDois.conteudo + ";\n";
 		}
 	}
@@ -819,11 +789,34 @@ atributos geraCodigoOperacoes(atributos elementoUm, atributos elementoDois, stri
 	return structRetorno;
 }
 
+atributos geraCodigoRelacional(atributos elementoUm, atributos elementoDois, string operacao) {
+	atributos structRetorno;
+
+	if(elementoUm.tipo == "bool" || elementoDois.tipo == "bool")
+		yyerror(string("operação \"") + operacao + ("\" não permitida com o tipo bool"));
+
+	structRetorno.conteudo = criaVariavelTemp();
+	structRetorno.tipo = "bool";
+
+	mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
+
+	if(elementoUm.tipo == elementoDois.tipo)
+	{
+		structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + elementoDois.conteudo + ";\n";
+	}
+	else
+	{
+		geraCodigoCoercao(structRetorno,elementoUm,elementoDois,operacao);
+	}
+
+	return structRetorno;
+}
+
 void geraCodigoDeclaracaoString(string variavel, int tamanhoString) {
 	
 	int tamanhoDeclaracao = calculaTamanhoMaximoString(tamanhoString);
 
-	bufferDeclaracoes.push_back("\tchar* " + variavel + "=(char*)malloc(" + to_string(tamanhoDeclaracao) + "*sizeof(char));\n");
+	mapDeclaracoes[variavel] = "\tchar* " + variavel + "=(char*)malloc(" + to_string(tamanhoDeclaracao) + "*sizeof(char));\n";
 }
 
 int calculaTamanhoMaximoString(int tamanhoString) {
@@ -843,52 +836,14 @@ atributos geraCodigoCoercaoExplicita(atributos elemento, string tipo) {
 
 	if(tipo == "bool")
 	{
-		bufferDeclaracoes.push_back("\tint" + structRetorno.conteudo + ";\n");
+		mapDeclaracoes[structRetorno.conteudo] = "\tint" + structRetorno.conteudo + ";\n";
 		structRetorno.codigo = elemento.codigo + "\t" + structRetorno.conteudo + "=(int)" + elemento.conteudo + ";\n";
 	}
 	else
 	{
-		bufferDeclaracoes.push_back("\t" + tipo + " " + structRetorno.conteudo + ";\n");
+		mapDeclaracoes[structRetorno.conteudo] = "\t" + tipo + " " + structRetorno.conteudo + ";\n";
 		structRetorno.codigo = elemento.codigo + "\t" + structRetorno.conteudo + "=(" + structRetorno.tipo + ")" + elemento.conteudo + ";\n";
 	}
-	return structRetorno;
-}
-
-atributos geraCodigoRelacional(atributos elementoUm, atributos elementoDois, string operacao) {
-	atributos structRetorno;
-
-	if(elementoUm.tipo == "bool" || elementoDois.tipo == "bool")
-		yyerror(string("operação \"") + operacao + ("\" não permitida com o tipo bool"));
-
-	structRetorno.conteudo = criaVariavelTemp();
-	structRetorno.tipo = "bool";
-
-	bufferDeclaracoes.push_back("\tint " + structRetorno.conteudo + ";\n");
-
-	if(elementoUm.tipo == elementoDois.tipo)
-	{	
-		structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + elementoDois.conteudo + ";\n";
-	}
-	else
-	{
-		string tipo = regraCoercao(elementoUm.tipo, elementoDois.tipo, operacao);
-		string variavelCoercao = criaVariavelTemp();
-		string codigoCoercao;
-
-		bufferDeclaracoes.push_back("\t" + tipo + " " + variavelCoercao + ";\n");
-
-		if(elementoUm.tipo != tipo)
-		{
-			codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + elementoUm.conteudo + ";\n";
-			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao + "\t" + structRetorno.conteudo + "=" + variavelCoercao + operacao + elementoDois.conteudo + ";\n";
-		}
-		else if(elementoDois.tipo != tipo)
-		{
-			codigoCoercao = "\t" + variavelCoercao + "=(" + tipo + ")" + elementoDois.conteudo + ";\n";
-			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao +"\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + variavelCoercao + ";\n";
-		}
-	}
-
 	return structRetorno;
 }
 
@@ -900,7 +855,6 @@ atributos geraCodigoDeclaComExp(atributos elementoUm, atributos elementoDois, st
 	string aux;
 
 	if (tipo == "str") {
-		
 		if(elementoUm.tipo == elementoDois.tipo)
 		{
 			aux = criaInstanciaTabela(elementoUm.codigo, tipo, elementoDois.tamanho);
@@ -910,20 +864,21 @@ atributos geraCodigoDeclaComExp(atributos elementoUm, atributos elementoDois, st
 		}
 		else
 		{
+			//TODO COERCAO PARA STRING
 			yyerror("não existe coerção com string ainda");
 			aux = criaInstanciaTabela(elementoUm.codigo, tipo, elementoDois.tamanho);
 		}
 	} else {
-		aux = criaInstanciaTabela(elementoUm.codigo, tipo);
 		if(elementoUm.tipo == elementoDois.tipo)
 		{
+			structRetorno.conteudo = criaInstanciaTabela(elementoUm.codigo, tipo);
 			structRetorno.tipo = elementoUm.tipo;
-			structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + elementoDois.conteudo + ";\n";
+			structRetorno.codigo = elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoDois.conteudo + ";\n";
 		}
 		else
 		{
-			structRetorno.tipo = regraCoercao(elementoUm.tipo,elementoDois.tipo,"=");
-			structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=(" + structRetorno.tipo + ")" + elementoDois.conteudo + ";\n";
+			structRetorno.conteudo = "";
+			geraCodigoCoercao(structRetorno, elementoUm, elementoDois, "declaracao");
 		}
 	}
 
@@ -937,7 +892,7 @@ atributos geraCodigoValores(atributos elemento) {
 	structRetorno.tipo = elemento.tipo;
 	if(structRetorno.tipo == "bool")
 	{
-		bufferDeclaracoes.push_back("\tint " + structRetorno.conteudo + ";\n");
+		mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
 		structRetorno.codigo = "\t" + structRetorno.conteudo + "=" + elemento.codigo + ";\n";
 	} else if (structRetorno.tipo == "str") {
 
@@ -949,7 +904,7 @@ atributos geraCodigoValores(atributos elemento) {
 		structRetorno.codigo = "\tstrcpy(" + structRetorno.conteudo + "," + elemento.codigo + ");\n";
 		structRetorno.tamanho = elemento.tamanho;
 	} else {
-		bufferDeclaracoes.push_back("\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n");
+		mapDeclaracoes[structRetorno.conteudo] = "\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n";
 		structRetorno.codigo = "\t" + structRetorno.conteudo + "=" + elemento.codigo + ";\n";
 	}
 
@@ -959,62 +914,63 @@ atributos geraCodigoValores(atributos elemento) {
 atributos geraCodigoAtribuicao(atributos elementoUm, atributos elementoDois) {
 	atributos structRetorno;
 
-	string aux = verificaExistencia(elementoUm.codigo, mapAtual);
+	string temporariaDaVariavel = verificaExistencia(elementoUm.codigo, mapAtual);
+	string tipoTemporariaDaVariavel = pegaTipo(elementoUm.codigo, mapAtual);
+	string tamanho = pegaTamanho(elementoUm.codigo, mapAtual);
 	
-	string tipoAux = pegaTipo(elementoUm.codigo, mapAtual);
-	if(elementoDois.tipo == tipoAux)
+	elementoUm.tipo = tipoTemporariaDaVariavel;
+	elementoUm.conteudo = temporariaDaVariavel;
+	elementoUm.tamanho = tamanho;
+
+	structRetorno.conteudo = temporariaDaVariavel;
+	structRetorno.tipo = "ope";
+
+	if(elementoDois.tipo == tipoTemporariaDaVariavel)
 	{
-		if(tipoAux == "str") {
-			int tamanhoElementoUm = stoi(pegaTamanho(elementoUm.codigo, mapAtual));
+		if(tipoTemporariaDaVariavel == "str") {
+			int tamanhoElementoUm = stoi(tamanho);
 			int tamanhoDeclaracao = calculaTamanhoMaximoString(tamanhoElementoUm);
 			
 			if(tamanhoDeclaracao < stoi(elementoDois.tamanho)) {
 				int novoTamanho = calculaTamanhoMaximoString(stoi(elementoDois.tamanho));
-				structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=(char*)realloc(" + aux + ", sizeof(char)*" + to_string(novoTamanho) + ");\n";
-				structRetorno.codigo += "\tstrcpy(" + aux + "," + elementoDois.conteudo + ");\n";
+				structRetorno.codigo = elementoDois.codigo + "\t" + temporariaDaVariavel + "=(char*)realloc(" + temporariaDaVariavel + ", sizeof(char)*" + to_string(novoTamanho) + ");\n";
+				structRetorno.codigo += "\tstrcpy(" + temporariaDaVariavel + "," + elementoDois.conteudo + ");\n";
 			} else {
-				structRetorno.codigo = elementoDois.codigo + "\tstrcpy(" + aux + "," + elementoDois.conteudo + ");\n";
+				structRetorno.codigo = elementoDois.codigo + "\tstrcpy(" + temporariaDaVariavel + "," + elementoDois.conteudo + ");\n";
 			}
-			TESTE
 			structRetorno.tamanho = elementoDois.tamanho;
 			adicionaTamanho(elementoUm.codigo, mapAtual, elementoDois.tamanho);
 		} else {
-			structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + elementoDois.conteudo + ";\n";
+			structRetorno.codigo = elementoDois.codigo + "\t" + temporariaDaVariavel + "=" + elementoDois.conteudo + ";\n";
 		}
-		
-		structRetorno.conteudo = aux;
-		structRetorno.tipo = "ope";
 	}
 	else
 	{
-		string tempTipo = regraCoercao(tipoAux,elementoDois.tipo,"=");
-		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=(" + tempTipo + ")" + elementoDois.conteudo + ";\n";
-		structRetorno.conteudo = aux;
-		structRetorno.tipo = "ope";
+		geraCodigoCoercao(structRetorno, elementoUm, elementoDois, "atribuicao");
 	}
 
 	return structRetorno;
 }
 
-atributos geraCodigoAtribuicaoComposta(atributos elementoUm, atributos elementoDois, string tipo) {
+atributos geraCodigoAtribuicaoComposta(atributos elementoUm, atributos elementoDois, string operacao) {
 	atributos structRetorno;
 
 	string aux = verificaExistencia(elementoUm.codigo, mapAtual);
-	
 	string tipoAux = pegaTipo(elementoUm.codigo, mapAtual);
+
+	structRetorno.conteudo = aux;
+	structRetorno.tipo = "ope";
+
+	elementoUm.conteudo = aux;
+	elementoUm.tamanho = pegaTamanho(elementoUm.codigo, mapAtual);
 
 	if(elementoDois.tipo == tipoAux)
 	{
-		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + aux + tipo[0] + elementoDois.conteudo + ";\n";
-		structRetorno.conteudo = aux;
-		structRetorno.tipo = "ope";
+		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + aux + operacao[0] + elementoDois.conteudo + ";\n";
 	}
 	else
 	{
-		string tempTipo = regraCoercao(tipoAux,elementoDois.tipo,"=");
-		structRetorno.codigo = elementoDois.codigo + "\t" + aux + "=" + aux + tipo[0] + "(" + tempTipo + ")" + elementoDois.conteudo + ";\n";
-		structRetorno.conteudo = aux;
-		structRetorno.tipo = "ope";
+		geraCodigoCoercao(structRetorno, elementoUm, elementoDois, operacao);
 	}
 
 	return structRetorno;
@@ -1029,7 +985,7 @@ atributos geraCodigoIf(atributos exprecao, atributos bloco) {
 	
 	structRetorno.conteudo = auxCondicao;
 
-	bufferDeclaracoes.push_back("\tint " + auxCondicao + ";\n");
+	mapDeclaracoes[auxCondicao] = "\tint " + auxCondicao + ";\n";
 
 	string auxFlag = criaFlag();
 
@@ -1109,9 +1065,10 @@ atributos geraCodigoLogico(atributos elementoUm, atributos elementoDois, string 
 	atributos structRetorno;
 
 	structRetorno.tipo = regraCoercao(elementoUm.tipo, elementoDois.tipo, operacao);
+	
 	structRetorno.conteudo = criaVariavelTemp();
 
-	bufferDeclaracoes.push_back("\tint " + structRetorno.conteudo + ";\n");
+	mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
 
 	if(operacao =="or")
 		structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + "||" + elementoDois.conteudo + ";\n";
@@ -1125,9 +1082,10 @@ atributos geraCodigoLogicoNot(atributos elemento, string operacao) {
 	atributos structRetorno;
 
 	structRetorno.tipo = regraCoercao(elemento.tipo, "bool", operacao);
+
 	structRetorno.conteudo = criaVariavelTemp();
 
-	bufferDeclaracoes.push_back("\tint " + structRetorno.conteudo + ";\n");
+	mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
 
 	structRetorno.codigo = elemento.codigo + "\t" + structRetorno.conteudo + "=!" + elemento.conteudo + ";\n";
 	
@@ -1189,7 +1147,7 @@ atributos geraCodigoWhile(atributos exprecao, atributos bloco) {
 	
 	structRetorno.conteudo = auxCondicao;
 
-	bufferDeclaracoes.push_back("\tint " + auxCondicao + ";\n");
+	mapDeclaracoes[auxCondicao] = "\tint " + auxCondicao + ";\n";
 
 	string flagInicio = pilhaFlagsBlocos[mapAtual].flagInicio;
 	string flagFim = pilhaFlagsBlocos[mapAtual].flagFim;
@@ -1212,7 +1170,7 @@ atributos geraCodigoFor(atributos exprecaoUm, atributos exprecaoDois, atributos 
 	
 	structRetorno.conteudo = auxCondicao;
 
-	bufferDeclaracoes.push_back("\tint " + auxCondicao + ";\n");
+	mapDeclaracoes[auxCondicao] = "\tint " + auxCondicao + ";\n";
 
 	string flagInicio = pilhaFlagsBlocos[mapAtual].flagInicio;
 	string flagFim = pilhaFlagsBlocos[mapAtual].flagFim;
@@ -1305,7 +1263,7 @@ atributos geraCodigoOperadorTamanho(atributos exprecao) {
 	structRetorno.conteudo = criaVariavelTemp();
 
 	if(exprecao.tipo == "str") {
-		bufferDeclaracoes.push_back("\tint " + structRetorno.conteudo + ";\n");
+		mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
 		structRetorno.codigo = "\t" + structRetorno.conteudo + "=" + exprecao.tamanho + ";\n";
 	} else {
 		yyerror("operador len só existe para strings");
@@ -1335,11 +1293,11 @@ void atualizaTipoInformacoesSwitch(string tipo) {
 
 	pilhaInformacoesSwitch[informacoesSwitchAtual].tipo = tipo;
 	if(tipo == "bool")
-		bufferDeclaracoes.push_back("\tint" + pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria + ";\n");
+		mapDeclaracoes[pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria] = "\tint" + pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria + ";\n";
 	else if(tipo == "string")
 		cout << "TODO" << endl;
 	else
-		bufferDeclaracoes.push_back("\t" + tipo + " " + pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria + ";\n");
+		mapDeclaracoes[pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria] = "\t" + tipo + " " + pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria + ";\n";
 }
 
 atributos geraCodigoSwitch(atributos exprecao, atributos cases, atributos defaul) {
@@ -1366,7 +1324,6 @@ atributos geraCodigoCase(atributos exprecao, atributos bloco) {
 	atributos structRetorno;
 	
 	string auxCondicao = criaVariavelTemp();
-	bufferDeclaracoes.push_back("\tint " + auxCondicao + ";\n");
 	
 	structRetorno.tipo = "";
 	structRetorno.tamanho = "";
@@ -1374,29 +1331,22 @@ atributos geraCodigoCase(atributos exprecao, atributos bloco) {
 
 	string tipoTempSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].tipo;
 	string temporariaSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria;
+	string tamanhoTemporariaSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].tamanho;
 
 	if(tipoTempSwitch == exprecao.tipo) {
+		mapDeclaracoes[auxCondicao] = "\tint " + auxCondicao + ";\n";
 		if(exprecao.tipo != "string")
 			structRetorno.codigo = exprecao.codigo + "\t" + auxCondicao + "=" + exprecao.conteudo + "==" + temporariaSwitch + ";\n\t" + auxCondicao + "=!" + auxCondicao + ";\n";
 		else
 			structRetorno.codigo = exprecao.codigo + "\t" + auxCondicao + "= strcmp(" + exprecao.conteudo + "," + temporariaSwitch + ");\n\t" + auxCondicao + "=!" + auxCondicao + ";\n"; // TODO verificar o strcmp
 	} else {
-		string tipoCoercao = regraCoercao(tipoTempSwitch, exprecao.tipo, "==");
-		string codigoCoercao;
+		atributos elementoAuxiliar;
+		elementoAuxiliar.tipo = tipoTempSwitch;
+		elementoAuxiliar.conteudo = temporariaSwitch;
+		elementoAuxiliar.tamanho = tamanhoTemporariaSwitch;
+		elementoAuxiliar.codigo = "";
 
-		string variavelCoercao = criaVariavelTemp();
-		bufferDeclaracoes.push_back("\t" + tipoCoercao + " " + variavelCoercao + ";\n");
-		
-		if(exprecao.tipo != tipoCoercao)
-		{	
-			codigoCoercao = "\t" + variavelCoercao + "=(" + tipoCoercao + ")" + exprecao.conteudo + ";\n";
-			structRetorno.codigo = exprecao.codigo + codigoCoercao + "\t" + auxCondicao + "=" + exprecao.conteudo + "==" + variavelCoercao + ";\n";
-		}
-		else if(tipoTempSwitch != tipoCoercao)
-		{
-			codigoCoercao = "\t" + variavelCoercao + "=(" + tipoCoercao + ")" + temporariaSwitch + ";\n";
-			structRetorno.codigo = exprecao.codigo + codigoCoercao +"\t" + auxCondicao + "=" + exprecao.conteudo + "==" + variavelCoercao + ";\n";
-		}
+		geraCodigoCoercao(structRetorno, exprecao, elementoAuxiliar, "switch");
 	}
 	
 	string auxFlag = criaFlag();
@@ -1425,15 +1375,22 @@ void geraCodigoCoercao(atributos& structRetorno, atributos& elementoUm, atributo
 	string tuplaCoercaoOrigem[3];
 	string tuplaCoercaoDestino[2];
 
-	tuplaCoercaoDestino[0] = regraCoercao(elementoUm.tipo, elementoDois.tipo, operacao);
+	if(operacao == "atribuicao" || operacao == "declaracao" || operacao == "atribuicaoComposta")
+		tuplaCoercaoDestino[0] = regraCoercao(elementoUm.tipo, elementoDois.tipo, "=");
+	else if(operacao == "switch")
+		tuplaCoercaoDestino[0] = regraCoercao(elementoUm.tipo, elementoDois.tipo, "==");
+	else
+		tuplaCoercaoDestino[0] = regraCoercao(elementoUm.tipo, elementoDois.tipo, operacao);
 		
 	string variavelRecebeCoercao = criaVariavelTemp();	
 	string codigoCoercao;
 
 	structRetorno.tipo = tuplaCoercaoDestino[0];
 
-	bufferDeclaracoes.push_back("\t" + tuplaCoercaoDestino[0] + " " + structRetorno.conteudo + ";\n");
-	bufferDeclaracoes.push_back("\t" + tuplaCoercaoDestino[0] + " " + variavelRecebeCoercao + ";\n");
+	if(structRetorno.conteudo != "")
+		mapDeclaracoes[structRetorno.conteudo] = "\t" + tuplaCoercaoDestino[0] + " " + structRetorno.conteudo + ";\n";
+	
+	mapDeclaracoes[variavelRecebeCoercao] = "\t" + tuplaCoercaoDestino[0] + " " + variavelRecebeCoercao + ";\n";
 
 	if(tuplaCoercaoDestino[0] == elementoUm.tipo) {
 		tuplaCoercaoOrigem[0] = elementoDois.tipo;
@@ -1462,12 +1419,19 @@ void geraCodigoCoercao(atributos& structRetorno, atributos& elementoUm, atributo
 		codigoCoercao = "\t" + variavelRecebeCoercao + "=(" + tuplaCoercaoDestino[0] + ")" + tuplaCoercaoOrigem[1] + ";\n";
 	}
 
-	//TODO ajusta para outras coercoes de string
-	if(operacao == "=") {
+	if(operacao == "+" || operacao == "-" || operacao == "/" || operacao == "*"
+	|| operacao == ">" || operacao == "<" || operacao == "<=" || operacao == ">="
+	|| operacao == "==" || operacao == "!=") {
 		structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao + "\t" + structRetorno.conteudo + "=" + variavelRecebeCoercao + operacao + tuplaCoercaoDestino[1] + ";\n";
-	} else {
-		structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao + "\t" + structRetorno.conteudo + "=" + variavelRecebeCoercao + operacao + tuplaCoercaoDestino[1] + ";\n";
-	} 
+	} else if(operacao == "declaracao") {
+		structRetorno.codigo = elementoDois.codigo + codigoCoercao + "\t" + criaInstanciaTabela(elementoUm.codigo, elementoUm.tipo) + "=" + variavelRecebeCoercao + ";\n";
+	} else if(operacao == "atribuicao") {
+		structRetorno.codigo = elementoDois.codigo + codigoCoercao + "\t" + tuplaCoercaoDestino[1] + "=" + variavelRecebeCoercao + ";\n";
+	} else if(operacao == "*=" || operacao == "/=" || operacao == "+=" || operacao == "-=" || operacao == "%=") {
+		structRetorno.codigo = elementoDois.codigo + codigoCoercao + "\t" + tuplaCoercaoDestino[1] + "=" + tuplaCoercaoDestino[1] + operacao[0] + variavelRecebeCoercao + ";\n";
+	} else if(operacao == "switch") {
+		structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao + "\t" + structRetorno.conteudo + "=" + variavelRecebeCoercao + "==" + tuplaCoercaoDestino[1] + ";\n";
+	}
 	
 }
 
@@ -1480,10 +1444,10 @@ string geraCodigoCoercaoStringToInt(string variavelRecebeCoercao, string variave
 	string temporariaSinal = criaVariavelTemp();
 	string temporariaPosicao = criaVariavelTemp();
 
-	bufferDeclaracoes.push_back("\tint " + temporarialCondicaoSinal + ";\n");
-	bufferDeclaracoes.push_back("\tchar " + temporarialComparacaoChar + ";\n");
-	bufferDeclaracoes.push_back("\tint " + temporariaSinal + ";\n");
-	bufferDeclaracoes.push_back("\tint " + temporariaPosicao + ";\n");
+	mapDeclaracoes[temporarialCondicaoSinal] = "\tint " + temporarialCondicaoSinal + ";\n";
+	mapDeclaracoes[temporarialComparacaoChar] = "\tchar " + temporarialComparacaoChar + ";\n";
+	mapDeclaracoes[temporariaSinal] = "\tint " + temporariaSinal + ";\n";
+	mapDeclaracoes[temporariaPosicao] = "\tint " + temporariaPosicao + ";\n";
 
 	string flagCondiSinal = criaFlag();
 	string flagCondiElseSinal = criaFlag();
@@ -1511,7 +1475,7 @@ string geraCodigoCoercaoStringToInt(string variavelRecebeCoercao, string variave
 	codigoCoercao += flagCondiElseSinal + ":\n";
 
 	string temporariaCondicao = criaVariavelTemp();
-	bufferDeclaracoes.push_back("\tint " + temporariaCondicao + ";\n");
+	mapDeclaracoes[temporariaCondicao] = "\tint " + temporariaCondicao + ";\n";
 
 	string flagInicio, flagFim, flagContadorFor;
 
@@ -1527,8 +1491,8 @@ string geraCodigoCoercaoStringToInt(string variavelRecebeCoercao, string variave
 
 	string temporariaIfComZero = criaVariavelTemp();
 	string temporariaIfComNove = criaVariavelTemp();
-	bufferDeclaracoes.push_back("\tchar " + temporariaIfComZero + ";\n");
-	bufferDeclaracoes.push_back("\tchar " + temporariaIfComNove + ";\n"); 
+	mapDeclaracoes[temporariaIfComZero] = "\tchar " + temporariaIfComZero + ";\n";
+	mapDeclaracoes[temporariaIfComNove] = "\tchar " + temporariaIfComNove + ";\n"; 
 
 	codigoCoercao += "\t" + temporarialComparacaoChar + "=" + variavelParaCoercao + "[" + temporariaCondicao + "];\n";
 	codigoCoercao += "\t" + temporariaIfComZero + "=" + temporarialComparacaoChar + ">='0';\n";
@@ -1537,8 +1501,8 @@ string geraCodigoCoercaoStringToInt(string variavelRecebeCoercao, string variave
 	string temporariaIfInterno = criaVariavelTemp();
 	string temporariaConta = criaVariavelTemp();
 	string flagIfInterno = criaFlag();
-	bufferDeclaracoes.push_back("\tint " + temporariaConta + ";\n");
-	bufferDeclaracoes.push_back("\tchar " + temporariaIfInterno + ";\n");
+	mapDeclaracoes[temporariaConta] = "\tint " + temporariaConta + ";\n";
+	mapDeclaracoes[temporariaIfInterno] = "\tchar " + temporariaIfInterno + ";\n";
 
 	codigoCoercao += "\t" + temporariaIfInterno + "=" + temporariaIfComZero + " && " + temporariaIfComNove + ";\n";
 
@@ -1573,15 +1537,15 @@ string geraCodigoCoercaoStringToFloat(string variavelRecebeCoercao, string varia
 	string temporariaCoercao = criaVariavelTemp();
 	string temporariaValorNumero = criaVariavelTemp();
 
-	bufferDeclaracoes.push_back("\tfloat " + temporariaValorInteiro + ";\n"); //rez
-	bufferDeclaracoes.push_back("\tfloat " + temporariaExpoente + ";\n"); //fact
-	bufferDeclaracoes.push_back("\tint " + temporariaPosicao + ";\n"); //posi
-	bufferDeclaracoes.push_back("\tint " + temporariaPonto + ";\n"); //ponto
-	bufferDeclaracoes.push_back("\tchar " + temporariaValorPosicao + ";\n"); //temp1
-	bufferDeclaracoes.push_back("\tint " + temporariaIfs + ";\n"); //temp2
-	bufferDeclaracoes.push_back("\tint " + temporariaIfComposto + ";\n"); //temp3
-	bufferDeclaracoes.push_back("\tfloat " + temporariaCoercao + ";\n"); //temp4
-	bufferDeclaracoes.push_back("\tint " + temporariaValorNumero + ";\n"); //temp5
+	mapDeclaracoes[temporariaValorInteiro] = "\tfloat " + temporariaValorInteiro + ";\n";
+	mapDeclaracoes[temporariaExpoente] = "\tfloat " + temporariaExpoente + ";\n";
+	mapDeclaracoes[temporariaPosicao] = "\tint " + temporariaPosicao + ";\n";
+	mapDeclaracoes[temporariaPonto] = "\tint " + temporariaPonto + ";\n";
+	mapDeclaracoes[temporariaValorPosicao] = "\tchar " + temporariaValorPosicao + ";\n";
+	mapDeclaracoes[temporariaIfs] = "\tint " + temporariaIfs + ";\n"; 
+	mapDeclaracoes[temporariaIfComposto] = "\tint " + temporariaIfComposto + ";\n";
+	mapDeclaracoes[temporariaCoercao] = "\tfloat " + temporariaCoercao + ";\n";
+	mapDeclaracoes[temporariaValorNumero] = "\tint " + temporariaValorNumero + ";\n";
 
 	string codigoRetorno = "// ------------Codigo de coercao string para float------------\n";
 
