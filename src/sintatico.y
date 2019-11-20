@@ -77,6 +77,9 @@ void adicionaTamanho(string, int, string);
 string pegaTamanho(string , int);
 string pegaTipo(string, int);
 
+bool isStructVazia(atributos);
+atributos structVazia(void);
+
 void imprimeBuffers(void);
 void adicionaNoMap(void);
 void retiraDoMap(void);
@@ -103,7 +106,7 @@ atributos geraCodigoContinue(string);
 atributos geraCodigoBreak(string);
 atributos geraCodigoAtribuicaoComposta(atributos, atributos, string);
 atributos geraCodigoParaMultiploOutput(atributos, atributos);
-atributos geraCodigoParaMultiploInput(atributos, atributos);
+atributos geraCodigoParaMultiploInput(atributos, atributos, atributos);
 atributos geraCodigoOperadorTamanho(atributos);
 void geraCodigoDeclaracaoString(string, int);
 atributos geraCodigoSwitch(atributos, atributos, atributos);
@@ -113,6 +116,7 @@ void geraCodigoCoercao(atributos&, atributos&, atributos&, string);
 string geraCodigoCoercaoStringToInt(string, string, string);
 string geraCodigoErroExecucao(string, string="0");
 string geraCodigoCoercaoStringToFloat(string, string, string);
+string geraCodigoInputString(atributos);
 
 %}
 
@@ -132,6 +136,7 @@ string geraCodigoCoercaoStringToFloat(string, string, string);
 %left '*' '/' '%'
 %left TK_OP_LEN
 %left '(' ')'
+
 
 %%
 
@@ -153,6 +158,7 @@ AUX_S       :
 BLOCO		: AUX_BLOCO '{' COMANDOS '}'
 			{
 				$$.codigo = $3.codigo;
+				retiraDoMap();
 			}
 			;
 
@@ -166,6 +172,7 @@ AUX_BLOCO   :
 BLOCO_LOOP	: AUXBLOCOLO '{' COMANDOS '}'
 			{
 				$$.codigo = $3.codigo;
+				retiraDoMap();
 			}
 			;
 
@@ -180,18 +187,15 @@ AUXBLOCOLO	:
 CONDI_IF	: TK_IF '(' E ')' BLOCO
 			{
 				$$ = geraCodigoIf($3,$5);
-				retiraDoMap();
 			}
 			| TK_IF '(' E ')' COMANDO
 			{
 				$$ = geraCodigoIf($3,$5);
-			} 
+			}
 			;
-
 CONDI_ELSE  : CONDI_IF TK_ELSE BLOCO
 			{
 				$$ = geraCodigoElse($1, $3);
-				retiraDoMap();
 			}
 			| CONDI_IF TK_ELSE COMANDO
 			{
@@ -235,7 +239,6 @@ DEFAULT		: TK_DEFAULT BLOCO
 CASE		: TK_CASE '(' E ')' BLOCO
 			{
 				$$ = geraCodigoCase($3, $5);
-				retiraDoMap();
 			}
 			;
 
@@ -252,14 +255,12 @@ CASES		: CASE CASES
 WHILE       : TK_WHILE '(' E ')' BLOCO_LOOP
 			{
 				$$ = geraCodigoWhile($3, $5);
-				retiraDoMap();
 			}
 			;
 
 FOR         : TK_FOR '(' AUXLOOP ';' E ';' ATRIS ')' BLOCO_LOOP
 			{
 				$$ = geraCodigoFor($3, $5, $7, $9);
-				retiraDoMap();
 			}
 			;
 
@@ -339,23 +340,23 @@ COMANDO 	: E ';'
 			{
 			    $$ = $1;
 			}
-			| CONDI_IF
+			| CONDI_IF '\n'
 			{
 				$$ = $1;
 			}
-			| CONDI_ELSE
+			| CONDI_ELSE '\n'
 			{
 				$$ = $1;
 			}
-			| WHILE
+			| WHILE '\n'
 			{
 				$$ = $1;
 			}
-			| FOR
+			| FOR '\n'
 			{
 				$$ = $1;
 			}
-			| SWITCH
+			| SWITCH '\n'
 			{
 				$$ = $1;
 			}
@@ -397,16 +398,19 @@ INPUT		: IDS '=' TK_INPUT '(' ')'
 			}
 			;
 
-IDS			: TK_ID ',' IDS
+IDS			: TK_ID ',' TK_ID IDS
 			{
-				$$ = geraCodigoParaMultiploInput($1, $3);
+				$$ = geraCodigoParaMultiploInput($1, $3, $4);
 			}
-			| TK_ID
+			| ',' TK_ID IDS
 			{
-				$$.codigo = $1.codigo;
-				$$.conteudo = "verificar";
+				$$ = geraCodigoParaMultiploInput($2, structVazia(), $3);
 			}
-			;			
+			|
+			{
+				$$.codigo = "";
+			}
+			;
 
 OUTPUT		: TK_OUTPUT '(' ES ')'
 			{
@@ -1098,24 +1102,102 @@ atributos geraCodigoInput(atributos variaveis) {
 	structRetorno.tipo = "input";
 	structRetorno.conteudo = "";
 	if( variaveis.tipo == "id") {
-		structRetorno.codigo = "\tstd::cin >> " + verificaExistencia(variaveis.codigo,mapAtual) + ";\n";
+		if(pegaTipo(variaveis.codigo, mapAtual) == "str") {
+			structRetorno.codigo = geraCodigoInputString(variaveis) + "\tgetchar();\n";
+		} else {
+			structRetorno.codigo = "\tstd::cin >> " + verificaExistencia(variaveis.codigo, mapAtual) + ";\n\tgetchar();\n";
+		}
 	} else {
-		structRetorno.codigo = "\tstd::cin >> " + variaveis.codigo + ";\n";
+		structRetorno.codigo = variaveis.codigo;
 	}
-	
+
 	return structRetorno;
 }
 
-atributos geraCodigoParaMultiploInput(atributos id, atributos outrosIds) {
+string geraCodigoInputString(atributos variavel) {
+
+	string temporariaVariavel = verificaExistencia(variavel.codigo, mapAtual);
+	string temporariaPegarChar = criaVariavelTemp();
+	string temporariaTamanho = criaVariavelTemp();
+	string temporariaInterador = criaVariavelTemp();
+	string temporariaLocalString = criaVariavelTemp();
+	string temporariaConta = criaVariavelTemp();
+	string temporariaEscalaDois = criaVariavelTemp();
+	string temporariaEscala = criaVariavelTemp();
+	string temporariaIf = criaVariavelTemp();
+
+	mapDeclaracoes[temporariaEscalaDois] = "\tint " + temporariaEscalaDois + ";\n";
+	mapDeclaracoes[temporariaIf] = "\tint " + temporariaIf + ";\n";
+	mapDeclaracoes[temporariaConta] = "\tint " + temporariaConta + ";\n";
+	mapDeclaracoes[temporariaTamanho] = "\tint " + temporariaTamanho + ";\n";
+	mapDeclaracoes[temporariaEscala] = "\tint " + temporariaEscala + ";\n";
+	mapDeclaracoes[temporariaInterador] = "\tint " + temporariaInterador + ";\n";
+	mapDeclaracoes[temporariaLocalString] = "\tint " + temporariaLocalString + ";\n";
+	mapDeclaracoes[temporariaPegarChar] = "\tchar " + temporariaPegarChar + ";\n";
+
+	string codigoLeitura = "//---------------------Codigo de input string ----------------------------\n";
+
+	codigoLeitura += "\t" + temporariaTamanho + "=0;\n";
+	codigoLeitura += "\t" + temporariaEscala + "=" + to_string(calculaTamanhoMaximoString(stoi(pegaTamanho(variavel.codigo, mapAtual)))) + ";\n";
+	codigoLeitura += "\t" + temporariaEscalaDois + "=4;\n";
+	string flagLoop = criaFlag();
+	codigoLeitura +=  flagLoop + ":\n";
+	codigoLeitura += "\t" + temporariaPegarChar + "=getchar();\n";
+	codigoLeitura += "\t" + temporariaTamanho + "++;\n";
+	codigoLeitura += "\t" + temporariaVariavel + "[" + temporariaLocalString + "]=" + temporariaPegarChar + ";\n";
+
+	codigoLeitura += "\t" + temporariaConta + "=" + temporariaEscala + "-1;\n";
+	codigoLeitura += "\t" + temporariaIf + "=" + temporariaTamanho + ">=" + temporariaConta + ";\n";
+	codigoLeitura += "\t" + temporariaIf + "=!" + temporariaIf + ";\n";
+
+	string flagIf = criaFlag();
+	codigoLeitura += "\tif(" + temporariaIf + ")\n\t goto " + flagIf + ";\n";
+	codigoLeitura += "\t" + temporariaEscala + "=" + temporariaEscala + "*" + temporariaEscalaDois + ";\n";
+	codigoLeitura += "\t" + temporariaEscalaDois + "=" + temporariaEscalaDois + "*" + temporariaEscalaDois + ";\n";
+	codigoLeitura += "\t" + temporariaVariavel + "= (char*)realloc(" + temporariaVariavel + ", sizeof(char)*" + temporariaEscala + ");\n";
+	codigoLeitura += flagIf + ":\n";
+
+	codigoLeitura += "\t" + temporariaLocalString + "=" + temporariaLocalString + "+1;\n";
+	codigoLeitura += "\t" + temporariaIf + "=" + temporariaPegarChar + " != '\\n';\n";
+	codigoLeitura += "\tif(" + temporariaIf + ")\n\t goto " + flagLoop + ";\n";
+	
+	codigoLeitura += "\t" + temporariaLocalString + "=" + temporariaLocalString + "-1;\n";
+	codigoLeitura += "\t" + temporariaVariavel + "[" + temporariaLocalString + "]= '\\0' ;\n";
+
+	codigoLeitura += "//---------------------Codigo de input string ----------------------------\n";
+	return codigoLeitura;
+}
+
+atributos geraCodigoParaMultiploInput(atributos id, atributos id2, atributos outrosIds) {
 	atributos structRetorno;
 	
+	structRetorno.tipo = "";
+	structRetorno.tamanho = "";
+	structRetorno.conteudo = "";
 
-	if (outrosIds.conteudo == "verificar") {
-		structRetorno.codigo = verificaExistencia(id.codigo, mapAtual) + " >> " + verificaExistencia(outrosIds.codigo, mapAtual);
+	if(isStructVazia(id2)) {
+		string tipoId = pegaTipo(id.codigo, mapAtual);
+
+		if (tipoId == "str") {
+			structRetorno.codigo = geraCodigoInputString(id) + outrosIds.codigo;
+		} else {
+			structRetorno.codigo = "\tstd::cin >> " +  verificaExistencia(id.codigo, mapAtual) + ";\n" + "\tgetchar();\n" + outrosIds.codigo;
+		}
 	} else {
-		structRetorno.codigo = verificaExistencia(id.codigo, mapAtual) + " >> " + outrosIds.codigo;
+		string tipoId = pegaTipo(id.codigo, mapAtual);
+		string tipoId2 = pegaTipo(id2.codigo, mapAtual);
+
+		if (tipoId == "str" && tipoId2 == "str") {
+			structRetorno.codigo = geraCodigoInputString(id) + geraCodigoInputString(id2) + outrosIds.codigo;
+		} else if(tipoId == "str") {
+			structRetorno.codigo = geraCodigoInputString(id) + "\tstd::cin >> " + verificaExistencia(id2.codigo, mapAtual) + ";\n\tgetchar();\n" + outrosIds.codigo;
+		} else if(tipoId2 == "str") {
+			structRetorno.codigo = "\tstd::cin >> " + verificaExistencia(id.codigo, mapAtual) + ";\n\tgetchar();\n" + geraCodigoInputString(id2) + outrosIds.codigo;
+		} else {
+			structRetorno.codigo = "\tstd::cin >> " +  verificaExistencia(id.codigo, mapAtual) + ";\n\tgetchar();\n\tstd::cin >> " + verificaExistencia(id2.codigo, mapAtual) + ";\n\tgetchar();\n" + outrosIds.codigo;
+		}
 	}
-	
+
 	return structRetorno;
 }
 
@@ -1133,7 +1215,7 @@ atributos geraCodigoParaMultiploOutput(atributos exprecao, atributos outraExprec
 	atributos structRetorno;
 
 	structRetorno.codigo = exprecao.codigo + outraExprecoes.codigo;
-	structRetorno.conteudo = exprecao.conteudo + " <<\" \"<< " + outraExprecoes.conteudo;
+	structRetorno.conteudo = exprecao.conteudo + " << \" \" << " + outraExprecoes.conteudo;
 
 	return structRetorno;
 }
@@ -1629,4 +1711,27 @@ string geraCodigoCoercaoStringToFloat(string variavelRecebeCoercao, string varia
 
 string geraCodigoErroExecucao(string msg, string codigoErro) {
 	return "\tstd::cout <<\"" + msg + "\"<<std::endl;\n\texit("+ codigoErro + ");\n";
+}
+
+atributos structVazia(void) {
+	atributos retorno;
+	
+	retorno.codigo = "";
+	retorno.tamanho = "";
+	retorno.conteudo = "";
+	retorno.tipo = "";
+
+	return retorno;
+}
+
+bool isStructVazia(atributos structParaTeste) {
+	if (
+		structParaTeste.codigo == "" &&
+		structParaTeste.tamanho == "" &&
+		structParaTeste.conteudo == "" &&
+		structParaTeste.tipo == ""
+	)
+		return true;
+
+	return false;
 }
