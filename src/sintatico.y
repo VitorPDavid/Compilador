@@ -115,8 +115,9 @@ string geraCodigoCoercaoStringToInt(string, string, string);
 string geraCodigoErroExecucao(string, string="0");
 string geraCodigoCoercaoStringToFloat(string, string, string);
 string geraCodigoInputString(atributos);
-string geraCodigoCalculaTamanhoMaximoString(string , int);
+string geraCodigoCalculaTamanhoMaximoString(string , string);
 atributos geraCodigoAtribuicaoString(atributos, atributos);
+void geraCodigoDeclaracaoStringOperacoes(atributos&, string , string);
 
 %}
 
@@ -695,8 +696,8 @@ string criaInstanciaTabela(string variavel, string tipo, string tamanho) {
 		else if (tipo == "str")
 		{
 			string tempTamanho = criaVariavelTemp();
-			mapDeclaracoes[tempTamanho] = "\tint " + tempTamanho + "=" + tamanho + ";\n";
 
+			mapDeclaracoes[tempTamanho] = "\tint " + tempTamanho + "=" + tamanho + ";\n";
 			geraCodigoDeclaracaoString(novaVariavel.temporaria, tamanho);
 
 			novaVariavel.tamanho = tempTamanho;
@@ -773,12 +774,13 @@ atributos geraCodigoOperacoes(atributos elementoUm, atributos elementoDois, stri
 		structRetorno.tipo = elementoUm.tipo;
 		//TODO MAIS OPERACOES COM STRING E REFATORAR ISSO !!!!
 		if (structRetorno.tipo == "str" && operacao == "+") {
-			int tamanhoString = stoi(elementoUm.tamanho) + stoi(elementoDois.tamanho);
-			geraCodigoDeclaracaoString(structRetorno.conteudo, tamanhoString);
+			
+			structRetorno.codigo += elementoUm.codigo + elementoDois.codigo;
 
-			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\tstrcpy(" + structRetorno.conteudo + "," + elementoUm.conteudo + ");\n";
+			geraCodigoDeclaracaoStringOperacoes(structRetorno, elementoUm.tamanho, elementoDois.tamanho);
+
+			structRetorno.codigo += "\tstrcpy(" + structRetorno.conteudo + "," + elementoUm.conteudo + ");\n";
 			structRetorno.codigo += "\tstrcat(" + structRetorno.conteudo + "," + elementoDois.conteudo + ");\n";
-			structRetorno.tamanho = to_string(tamanhoString);
 		} else {
 			mapDeclaracoes[structRetorno.conteudo] = "\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n";
 			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + elementoDois.conteudo + ";\n";
@@ -790,6 +792,52 @@ atributos geraCodigoOperacoes(atributos elementoUm, atributos elementoDois, stri
 	}
 
 	return structRetorno;
+}
+
+string geraCodigoCalculaTamanhoMaximoString(string temporariaTamanho, string temporariaDestino) {
+	string codigoRetorno;
+
+	string temporariaEscala = criaVariavelTemp();
+	string temporariaTamanhoEscala = criaVariavelTemp();
+	string temporariaIf = criaVariavelTemp();
+	string flagInicioLoop = criaFlag();
+	string flagFimLoop = criaFlag();
+
+	mapDeclaracoes[temporariaIf] = "\tint " + temporariaIf + ";\n";
+	mapDeclaracoes[temporariaEscala] = "\tint " + temporariaEscala + ";\n";
+	mapDeclaracoes[temporariaTamanhoEscala] = "\tint " + temporariaTamanhoEscala + ";\n";
+
+	codigoRetorno += "\t" + temporariaEscala + "= 4;\n";
+	codigoRetorno += "\t" + temporariaTamanhoEscala + "= 50;\n";
+
+	codigoRetorno += flagInicioLoop + ":\n";
+
+	codigoRetorno += "\t" + temporariaIf + "=" + temporariaTamanhoEscala + "<" + temporariaTamanho + ";\n";
+	codigoRetorno += "\t" + temporariaIf + "=!" + temporariaIf + ";\n";
+
+	codigoRetorno += "\tif(" + temporariaIf + ")\n\t  goto " + flagFimLoop + ";\n";
+
+	codigoRetorno += "\t" + temporariaTamanhoEscala + "=" + temporariaTamanhoEscala + "*" + temporariaEscala + ";\n";
+	codigoRetorno += "\t" + temporariaEscala + "=" + temporariaEscala + "*" + temporariaEscala + ";\n";
+	codigoRetorno += "\tgoto " + flagInicioLoop + ";\n";
+
+	codigoRetorno += flagFimLoop + ":\n";
+	codigoRetorno += "\t" + temporariaDestino + "=" + temporariaTamanhoEscala + ";\n";
+
+	return codigoRetorno;
+}
+
+void geraCodigoDeclaracaoStringOperacoes(atributos& structVariavelDeclarar , string variavelTamanho1, string variavelTamanho2) {
+
+	string temporariaTamanho = criaVariavelTemp();
+
+	mapDeclaracoes[temporariaTamanho] = "\tint " + temporariaTamanho + ";\n";
+	mapDeclaracoes[structVariavelDeclarar.conteudo] = "\tchar* " + structVariavelDeclarar.conteudo + "=(char*)malloc(50*sizeof(char));\n";	
+
+	structVariavelDeclarar.codigo += "\t" + temporariaTamanho + "=" + variavelTamanho1 + "+" + variavelTamanho2 + ";\n";
+	structVariavelDeclarar.codigo += geraCodigoCalculaTamanhoMaximoString(temporariaTamanho, temporariaTamanho);
+
+	structVariavelDeclarar.tamanho = temporariaTamanho;
 }
 
 atributos geraCodigoRelacional(atributos elementoUm, atributos elementoDois, string operacao) {
@@ -816,7 +864,6 @@ atributos geraCodigoRelacional(atributos elementoUm, atributos elementoDois, str
 }
 
 void geraCodigoDeclaracaoString(string variavel, string tamanhoString) {
-	
 	string tamanhoDeclaracao = to_string(calculaTamanhoMaximoString( stoi(tamanhoString) ));
 
 	mapDeclaracoes[variavel] = "\tchar* " + variavel + "=(char*)malloc(" + tamanhoDeclaracao + "*sizeof(char));\n";
@@ -859,18 +906,24 @@ atributos geraCodigoDeclaComExp(atributos elementoUm, atributos elementoDois, st
 
 	if (tipo == "str") {
 		if(elementoUm.tipo == elementoDois.tipo)
-		{
-			aux = criaInstanciaTabela(elementoUm.codigo, tipo, elementoDois.tamanho);
+		{			
+			aux = criaInstanciaTabela(elementoUm.codigo, tipo);
 
 			structRetorno.tipo = elementoUm.tipo;
-			structRetorno.codigo = elementoDois.codigo + "\tstrcpy(" + aux + "," + elementoDois.conteudo + ");\n";
-			structRetorno.tamanho = elementoDois.tamanho;
+
+			structRetorno.tamanho = criaVariavelTemp();
+			mapDeclaracoes[structRetorno.tamanho] = "\tint " + structRetorno.tamanho + ";\n";
+
+			structRetorno.codigo += elementoDois.codigo;
+			structRetorno.codigo += geraCodigoCalculaTamanhoMaximoString(elementoDois.tamanho, structRetorno.tamanho);
+			structRetorno.codigo += "\tstrcpy(" + aux + "," + elementoDois.conteudo + ");\n";
+			adicionaTamanho(elementoUm.codigo, mapAtual, elementoDois.tamanho);
 		}
 		else
 		{
 			//TODO COERCAO PARA STRING
 			yyerror("não existe coerção para string");
-			aux = criaInstanciaTabela(elementoUm.codigo, tipo, elementoDois.tamanho);
+			// aux = criaInstanciaTabela(elementoUm.codigo, tipo, elementoDois.tamanho);
 		}
 	} else {
 		if(elementoUm.tipo == elementoDois.tipo)
@@ -920,7 +973,6 @@ atributos geraCodigoAtribuicao(atributos elementoUm, atributos elementoDois) {
 	atributos structRetorno;
 
 	string temporariaDaVariavel = verificaExistencia(elementoUm.codigo, mapAtual);
-	string temporariaDaVariavel = verificaExistencia(elementoUm.codigo, mapAtual);
 	string tipoTemporariaDaVariavel = pegaTipo(elementoUm.codigo, mapAtual);
 	string tamanho = pegaTamanho(elementoUm.codigo, mapAtual);
 
@@ -934,9 +986,7 @@ atributos geraCodigoAtribuicao(atributos elementoUm, atributos elementoDois) {
 	if(elementoDois.tipo == tipoTemporariaDaVariavel)
 	{
 		if(tipoTemporariaDaVariavel == "str") {
-
-			structRetorno =  geraCodigoAtribuicaoString(elementoUm, elementoDois);
-			
+			structRetorno = geraCodigoAtribuicaoString(elementoUm, elementoDois);
 		} else {
 			structRetorno.codigo = elementoDois.codigo + "\t" + temporariaDaVariavel + "=" + elementoDois.conteudo + ";\n";
 		}
@@ -972,8 +1022,10 @@ atributos geraCodigoAtribuicaoString(atributos elementoDestido, atributos elemen
 
 	structRetorno.codigo += "\tstrcpy(" + elementoDestido.conteudo + "," + elementoOrigem.conteudo + ");\n";
 
-	structRetorno.tamanho = elementoDois.tamanho;
-	adicionaTamanho(elementoDestido.codigo, mapAtual, elementoDois.tamanho);
+	structRetorno.tamanho = elementoOrigem.tamanho;
+	adicionaTamanho(elementoDestido.codigo, mapAtual, elementoOrigem.tamanho);
+
+	return structRetorno;
 }
 
 atributos geraCodigoAtribuicaoComposta(atributos elementoUm, atributos elementoDois, string operacao) {
@@ -1122,7 +1174,7 @@ atributos geraCodigoInput(atributos variaveis) {
 	structRetorno.conteudo = "";
 	if( variaveis.tipo == "id") {
 		if(pegaTipo(variaveis.codigo, mapAtual) == "str") {
-			structRetorno.codigo = geraCodigoInputString(variaveis) + "\tgetchar();\n";
+			structRetorno.codigo = geraCodigoInputString(variaveis) + ";\n";
 		} else {
 			structRetorno.codigo = "\tstd::cin >> " + verificaExistencia(variaveis.codigo, mapAtual) + ";\n\tgetchar();\n";
 		}
@@ -1191,37 +1243,6 @@ string geraCodigoInputString(atributos variavel) {
 
 	codigoLeitura += "//---------------------Codigo de input string ----------------------------\n";
 	return codigoLeitura;
-}
-
-string geraCodigoCalculaTamanhoMaximoString(string temporariaTamanho, int temporariaDestino) {
-	string codigoRetorno;
-
-	string temporariaEscala = criaVariavelTemp();
-	string temporariaTamanhoEscala = criaVariavelTemp();
-	string temporariaIf = criaVariavelTemp();
-	string flagInicioLoop = criaFlag();
-	string flagFimLoop = criaFlag();
-
-	mapDeclaracoes[temporariaIf] = "\tint " + temporariaIf + ";\n";
-	mapDeclaracoes[temporariaEscala] = "\tint " + temporariaEscala + ";\n";
-	mapDeclaracoes[temporariaTamanhoEscala] = "\tint " + temporariaTamanhoEscala + ";\n";
-
-	codigoRetorno += "\t" + temporariaEscala + "= 4;\n";
-	codigoRetorno += "\t" + temporariaTamanhoEscala + "= 50;\n";
-
-	codigoRetorno += flagInicioLoop + ":\n";
-
-	codigoRetorno += "\t" + temporariaIf + "=" + temporariaTamanhoEscala + "<" + temporariaTamanho + ";\n";
-	codigoRetorno += "\t" + temporariaIf + "=!" + temporariaIf + ";\n";
-
-	codigoRetorno += "\tif(" + temporariaIf + ")\n\t  goto " + flagFimLoop + ";\n";
-
-	codigoRetorno += "\t" + temporariaTamanhoEscala + "=" + temporariaTamanhoEscala + "*" + temporariaEscala + ";\n";
-	codigoRetorno += "\t" + temporariaEscala + "=" + temporariaEscala + "*" + temporariaEscala + ";\n";
-	codigoRetorno += "\t goto " + flagInicioLoop + ";\n";
-
-	codigoRetorno += flagFimLoop + ":\n";
-	codigoRetorno += "\t" + temporariaDestino + "=" + temporariaTamanhoEscala
 }
 
 atributos geraCodigoParaMultiploInput(atributos id, atributos id2, atributos outrosIds) {
@@ -1433,7 +1454,9 @@ void atualizaTipoInformacoesSwitch(string tipo) {
 	if(tipo == "bool")
 		mapDeclaracoes[pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria] = "\tint" + pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria + ";\n";
 	else if(tipo == "string")
-		// TODO
+	{
+		//TODO
+	}
 	else
 		mapDeclaracoes[pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria] = "\t" + tipo + " " + pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria + ";\n";
 }

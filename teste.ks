@@ -1,9 +1,7 @@
-int a = 1;
-int b;
-float c;
-str d;
-float e;
+str c = "teste";
+str d = "kek";
+str e;
 
-a,b,c,d = input();
+e = "olar";
 
-output(a,b,c,d, d.len());
+output(d+c+e,c.len(),d.len(),e.len());
