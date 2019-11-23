@@ -5,6 +5,5 @@ O grupo é composto pelos alunos: Daniel Matias, Douglas Custodio, Luan Pinheiro
 Para criar o compilador -> make
 Para criar e rodar o compilador -> make kek
 Para executar o compilador -> make run
-Para executar o compilador criando um arquivo de saida -> make create-saida
-Para compilar e executar codigo INTERMEDIARIO -> make run-saida
+Para executar o compilador criando um arquivo de saida compilar e executar esse arquivo -> make exec-saida
 Para limpar arquivos desnecessarios -> make clean-all

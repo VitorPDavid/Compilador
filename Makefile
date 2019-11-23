@@ -63,10 +63,8 @@ $(MAIN): $(SRC)/y.tab.c $(SRC)/lex.yy.c
 run:
 	-@./$(MAIN) < $(ENT)
 
-create-saida:
+exec-saida:
 	-@./$(MAIN) < $(ENT) > $(SAIDA)
-
-run-saida: $(SAIDA)
 	-@$(CC) -o $(EXECSAIDA) $(SAIDA) $(FLAGS)
 	-@./$(EXECSAIDA)
 
