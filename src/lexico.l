@@ -46,6 +46,7 @@ STRAP '([^\\']|\\.)*'
 "switch"         { return TK_SWITCH; }
 "case"           { return TK_CASE; }
 "default"        { return TK_DEFAULT; }
+
 "while"          { return TK_WHILE; }
 "for"            { return TK_FOR; }
 "continue"       { return TK_CONTINUE; }
@@ -53,6 +54,9 @@ STRAP '([^\\']|\\.)*'
 
 "if"             { return TK_IF; }
 "else"           { return TK_ELSE; }
+
+"def"            { return TK_DEF; }
+"void"           { return TK_TIPO_VOID; }
 
 {LOGI}           { yylval.codigo = yytext; yylval.tipo = "logico"; return TK_LOGI; }
 "not"            { yylval.codigo = yytext; yylval.tipo = "logico"; return TK_NOT; }
