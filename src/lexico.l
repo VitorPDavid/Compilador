@@ -56,12 +56,16 @@ STRAP '([^\\']|\\.)*'
 "else"           { return TK_ELSE; }
 
 "def"            { return TK_DEF; }
-"void"           { return TK_TIPO_VOID; }
+"void"           { yylval.codigo = yytext; yylval.tipo = "t_void"; return TK_TIPO_VOID; }
+"return"         { return TK_RETURN; }
 
 {LOGI}           { yylval.codigo = yytext; yylval.tipo = "logico"; return TK_LOGI; }
 "not"            { yylval.codigo = yytext; yylval.tipo = "logico"; return TK_NOT; }
 
 [+\-*/=]         { return *yytext; }
+
+"=>"             { return TK_SETA; }
+
 {REL}            { yylval.codigo = yytext; yylval.tipo = "rel"; return TK_REL; }
 
 {ATR}            { yylval.codigo = yytext; yylval.tipo = "atri"; return TK_ATR; }
