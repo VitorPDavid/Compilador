@@ -49,18 +49,35 @@
 		string flagFim;
 	} informacoesSwitch;
 
-	// usado para as declaracoes de variaveis
-	map<string, string, compare_map_tmp> mapDeclaracoes;
+	typedef struct {
+		vector<string> tipoParametros;
+		string temporaria;
+		int posicaoInicioOpcionais = -1;
+	} identificadorFuncao;
 
-	//usados para manter contexto de blocos
-	vector< unordered_map<string, caracteristicas> > pilhaMaps;
-	vector< informacoesSwitch > pilhaInformacoesSwitch;
-	vector< flagsBloco > pilhaFlagsBlocos;
+	typedef struct {
+		unordered_map<string, vector<identificadorFuncao>> mapFuncoes;
+		vector<string> parametros;
+		vector<string> parametrosOpcionais;
+		vector<string> tipoParametros;
+		int posicaoInicioOpcionais = -1;
+		string tipoReturn;
 
-	int informacoesSwitchAtual = -1;
-	int mapAtual = -1;
+		bool semRetorno = true;
 
-	// ------------------------ Variaveis globais utilizadas
+		// usado para as declaracoes de variaveis
+		map<string, string, compare_map_tmp> mapDeclaracoes;
+
+		//usados para manter contexto de blocos
+		vector< unordered_map<string, caracteristicas> > pilhaMaps;
+		vector< informacoesSwitch > pilhaInformacoesSwitch;
+		vector< flagsBloco > pilhaFlagsBlocos;
+
+		int informacoesSwitchAtual = -1;
+		int mapAtual = -1;
+	} caracteristicasFuncao;
+
+	// ------------------------ Variaveis globais utilizadas -------------------------------------
 		int numeroLinhas = 1;
 
 		// usado para gerar variaveis e flags unicas
@@ -68,8 +85,17 @@
 		int proxLabelLoop = 0;
 		int proxLabel = 0;
 
-	// Funcoes de utilidade ------------------------------------------------------------------
+		vector<caracteristicasFuncao> pilhaFuncao;
+		int funcaoAtual = -1;
 
+		string declaracoesString;
+
+		vector< vector<identificadorFuncao> > auxChamadaFuncao;
+		vector< int > auxQualParametro;
+
+		#define FUN pilhaFuncao[funcaoAtual]
+
+	// Funcoes de utilidade ----------------------------------------------------------------------
 		string criaInstanciaTabela(string, string = "", string="0");
 		void criaFlagLoop(string&, string&, string&);
 		void inicializaFlagsDaPilhaDeBloco();
@@ -106,14 +132,6 @@
 		void retiraDoMap(void);
 
 
-
-		void adicionaNoMapFuncoes(void);
-		void retiraDoMapFuncoes(void);
-
-
-		void colocaParametrosNoMap(void);
-
-
 		void atualizaTipoInformacoesSwitch(string);
 		void empilhaInformacoesSwitch(void);
 		void retiraInformacoesSwitch(void);
@@ -127,12 +145,10 @@
 		atributos geraCodigoDefault(atributos);
 
 
-		void imprimieDeclaracoesFuncoes(void);
-
 		void yyerror(string);
 		int yylex(void);
 
-	// Geradores auxiliares -------------------------------------------------------------------
+	// Geradores auxiliares ----------------------------------------------------------------------
 		string geraCodigoErroExecucao(string, string="0");
 		string geraCodigoCoercaoStringToInt(string, string, string);
 		string geraCodigoCoercaoStringToFloat(string, string, string);
@@ -142,9 +158,9 @@
 		atributos geraCodigoAtribuicao(atributos, atributos);
 		atributos geraCodigoAtribuicaoString(atributos, atributos);
 		atributos geraCodigoAtribuicaoComposta(atributos, atributos, string);
-	// Geradores de declaracoes -------------------------------------------------------------------
+	// Geradores de declaracoes ------------------------------------------------------------------
 		atributos geraCodigoDeclaComExp(atributos, atributos, string);
-	// Geradores de exprecoes -------------------------------------------------------------------
+	// Geradores de exprecoes --------------------------------------------------------------------
 		atributos geraCodigoValores(atributos);
 
 		atributos geraCodigoCoercaoExplicita(atributos , string );
@@ -180,6 +196,33 @@
 
 		atributos geraCodigoCase(atributos, atributos);
 		atributos geraCodigoSwitch(atributos, atributos, atributos);
+	// Geradores Funcao --------------------------------------------------------------------------
+		void adicionaNoMapFuncoes(void);
+
+		void retiraDoMapFuncoes(void);
+
+		void verificaExistenciaFuncao(string, int);
+
+		atributos geraCodigoChamadaFuncao(atributos, atributos);
+
+		atributos geraCodigoChamadaFuncaoComando(atributos id, atributos parametros);
+
+		atributos geraCodigoExpreDeclaraFuncao(atributos, atributos);
+
+		atributos geraCodigoReturn(atributos);
+
+		string geraCodigoParametros(string, string, atributos, atributos);
+
+		void geraCodigoDeclaracaoStringParametro(string, string);
+
+		string criaInstanciaTabelaParametro(string, string, string="0");
+
+		string adicionaDeclaracoesFuncao(void) ;
+
+		string geraCodigoDeclaParametro(atributos, atributos, string);
+
+		atributos geraCodigoDeclaracaoFuncao(atributos, atributos, atributos, atributos);
+
 %}
 
 %token TK_INT TK_FLOAT TK_EXP TK_OCTAL TK_HEX TK_BOOL TK_STR
@@ -197,21 +240,23 @@
 %left TK_OP_LEN
 %left '(' ')'
 
-
 %%
 
 S 			: AUX_S COMANDOS
 			{
 				cout << "/*Compilador Kek*/\n#include <iostream>\n#include <string.h>\n#include <stdio.h>\n#define true 1\n#define false 0\n\n\n";
-				imprimeDeclaracoes(mapDeclaracoes);
+				imprimeDeclaracoes(FUN.mapDeclaracoes);
+				cout << "// --------------------------- Declaracao funcoes ----------------------------"<< endl;
+				cout << declaracoesString;
+				cout << "// --------------------------- Fim Declaracao funcoes ----------------------------"<< endl;
 				cout << "int main(void)\n{\n" << $2.codigo << "\treturn 0;\n}" << endl;
 			}
 			;
 
 AUX_S       :
 			{
+				adicionaNoMapFuncoes();
 				adicionaNoMap();
-
 				$$.codigo = "";
 			}
 			;
@@ -438,6 +483,19 @@ COMANDO 	: E ';'
 			{
 				$$ = $1;
 			}
+			| DECLA_FUN
+			{
+				$$ = $1;
+			}
+			| AUX_F_C '(' AUX_C_FUN ')' ';'
+			{
+				$$ = geraCodigoChamadaFuncaoComando($1, $3);
+			}
+			;
+			| RETURN ';'
+			{
+				$$ = $1;
+			}
 			;
 
 ATRI		: TK_ID '=' E
@@ -480,6 +538,104 @@ OUTPUT		: TK_OUTPUT '(' ES ')'
 			}
 			;
 
+DECLA_FUN	: AUX_FUN TK_ID '(' AUX_PARAM ')' TK_SETA AUX_TIPO_R '{' COMANDOS '}'
+			{
+				$$ = geraCodigoDeclaracaoFuncao($2, $4, $7, $9);
+				retiraDoMap();
+				retiraDoMapFuncoes();
+			}
+			| AUX_FUN TK_ID '(' AUX_PARAM ')' '{' COMANDOS '}'
+			{
+				$$ = geraCodigoDeclaracaoFuncao($2, $4, structVazia(), $7);
+				retiraDoMap();
+				retiraDoMapFuncoes();
+			}
+			;
+
+AUX_FUN		: TK_DEF
+			{
+				adicionaNoMapFuncoes();
+				adicionaNoMap();
+			}
+			;
+
+AUX_TIPO 	: TK_TIPO_BOOL
+			{
+				$$.tipo = "bool";
+			}
+			| TK_TIPO_DOUBLE
+			{
+				$$.tipo = "double";
+			}
+			| TK_TIPO_STR
+			{
+				$$.tipo = "str";
+			}
+			| TK_TIPO_FLOAT
+			{
+				$$.tipo = "float";
+			}
+			| TK_TIPO_INT
+			{
+				$$.tipo = "int";
+			}
+			;
+
+AUX_TIPO_R 	: AUX_TIPO
+			{
+				FUN.tipoReturn = $1.tipo;
+				$$.tipo = $1.tipo;
+			}
+			| TK_TIPO_VOID
+			{
+				FUN.tipoReturn = "void";
+				$$.tipo = "void";
+			}
+			;
+
+AUX_PARAM	: PARAM_DECLA ',' PARAM
+			{
+				$$.codigo = $1.codigo + $3.codigo;
+			}
+			| PARAM_DECLA
+			{
+				$$ = $1;
+			}
+			| PARAM
+			{
+				$$ = $1;
+			}
+			|
+			{
+				$$.codigo = "";
+			}
+			;
+
+PARAM_DECLA	: PARAM_DECLA ',' AUX_TIPO TK_ID
+			{
+				$$.codigo = geraCodigoParametros($1.codigo, $3.tipo, $4, structVazia());
+			}
+			| AUX_TIPO TK_ID
+			{
+				$$.codigo = geraCodigoParametros("", $1.tipo, $2, structVazia());
+			}
+			;
+
+PARAM		: PARAM ',' AUX_TIPO TK_ID '=' E
+			{
+				$$.codigo = geraCodigoParametros($1.codigo, $3.tipo, $4, $6);
+			}
+			| AUX_TIPO TK_ID '=' E
+			{
+				$$.codigo = geraCodigoParametros("", $1.tipo, $2, $4);
+			}
+			;
+
+RETURN		: TK_RETURN E
+			{
+				$$ = geraCodigoReturn($2);
+			}
+			;
 
 ES			: E ',' ES
 			{
@@ -540,47 +696,7 @@ DECLARA		: TK_TIPO_INT TK_ID
 			{
 				$$ = geraCodigoDeclaComExp($2,$4,"str");
 			}
-			/* | TK_TIPO_INT '[' TK_INT ']' TK_ID
-			{
-				$$ = geraCodigoDeclaArrays($5,$3.codigo,"int");
-			}
-			| TK_TIPO_INT '[' ']' TK_ID
-			{
-				$$ = geraCodigoDeclaArrays($4,"1","int");
-			}
-			| TK_TIPO_FLOAT '[' TK_INT ']' TK_ID
-			{
-				$$ = geraCodigoDeclaArrays($5,$3.codigo,"float");
-			}
-			| TK_TIPO_FLOAT '[' ']' TK_ID
-			{
-				$$ = geraCodigoDeclaArrays($4,"1","float");
-			}
-			| TK_TIPO_BOOL '[' TK_INT ']' TK_ID
-			{
-				$$ = geraCodigoDeclaArrays($5,$3.codigo,"bool");
-			}
-			| TK_TIPO_BOOL '[' ']' TK_ID
-			{
-				$$ = geraCodigoDeclaArrays($4,"1","bool");
-			}
-			| TK_TIPO_DOUBLE '[' TK_INT ']' TK_ID
-			{
-				$$ = geraCodigoDeclaArrays($5,$3.codigo,"double");
-			}
-			| TK_TIPO_DOUBLE '[' ']' TK_ID
-			{
-				$$ = geraCodigoDeclaArrays($4,"1","double");
-			}
-			| TK_TIPO_STR '[' TK_INT ']' TK_ID
-			{
-				$$ = geraCodigoDeclaArrays($5,$3.codigo,"str");
-			}
-			| TK_TIPO_STR '[' ']' TK_ID
-			{
-				$$ = geraCodigoDeclaArrays($4,"1","str");
-			}
-			*/ ;
+			;
 
 E 			: E '+' E
 			{
@@ -658,9 +774,35 @@ E 			: E '+' E
 			{
 				$$ = geraCodigoOperadorTamanho($1);
 			}
+			| AUX_F_C '(' AUX_C_FUN ')'
+			{
+				$$ = geraCodigoChamadaFuncao($1, $3);
+			}
+			;
+
+AUX_C_FUN	: E ',' AUX_C_FUN
+			{
+				$$ = geraCodigoExpreDeclaraFuncao($1, $3);
+			}
+			| E
+			{
+				$$ = geraCodigoExpreDeclaraFuncao($1, structVazia());
+			}
+			|
+			{
+				$$ = structVazia();
+			}
+			;
+
+AUX_F_C		: TK_ID
+			{
+				verificaExistenciaFuncao($1.codigo, funcaoAtual);
+				$$.codigo = $1.codigo;
+			}
 			;
 
 %%
+
 #include "lex.yy.c"
 
 int yyparse();
@@ -671,12 +813,13 @@ int main( int argc, char* argv[] ) {
 	return 0;
 }
 
-// Funcoes de utilidade ------------------------------------------------------------------
+// Funcoes de utilidade ---------------------------------------------------------------------
 
 	string criaInstanciaTabela(string variavel, string tipo, string tamanho) {
-		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps.back()).find(variavel);
+		unordered_map<string, caracteristicas> auxMap = FUN.pilhaMaps.back();
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = auxMap.find(variavel);
 
-		if ( linhaDaVariavel == (pilhaMaps.back()).end() ){
+		if ( linhaDaVariavel == auxMap.end() ){
 			caracteristicas novaVariavel;
 
 			novaVariavel.temporaria = criaVariavelTemp();
@@ -684,24 +827,24 @@ int main( int argc, char* argv[] ) {
 			novaVariavel.tipo = tipo;
 
 			if(tipo == "bool")
-				mapDeclaracoes[novaVariavel.temporaria] = "\tint " + novaVariavel.temporaria + ";\n";
+				FUN.mapDeclaracoes[novaVariavel.temporaria] = "\tint " + novaVariavel.temporaria + ";\n";
 			else if (tipo == "str")
 			{
 				string tempTamanho = criaVariavelTemp();
 
-				mapDeclaracoes[tempTamanho] = "\tint " + tempTamanho + "=" + tamanho + ";\n";
+				FUN.mapDeclaracoes[tempTamanho] = "\tint " + tempTamanho + "=" + tamanho + ";\n";
 				geraCodigoDeclaracaoString(novaVariavel.temporaria, tamanho);
 
 				novaVariavel.tamanho = tempTamanho;
 			} else
-				mapDeclaracoes[novaVariavel.temporaria] = "\t" + tipo + " " + novaVariavel.temporaria + ";\n";
+				FUN.mapDeclaracoes[novaVariavel.temporaria] = "\t" + tipo + " " + novaVariavel.temporaria + ";\n";
 
-			(pilhaMaps.back())[variavel] = novaVariavel;
+			(FUN.pilhaMaps.back())[variavel] = novaVariavel;
 
 			return novaVariavel.temporaria;
 		}
 		else {
-			return (pilhaMaps.back())[variavel].temporaria;
+			return (FUN.pilhaMaps.back())[variavel].temporaria;
 		}
 		return "";
 	}
@@ -722,9 +865,9 @@ int main( int argc, char* argv[] ) {
 
 		criaFlagLoop(flagInicio, flagFim, flagContadorFor);
 
-		pilhaFlagsBlocos[mapAtual].flagInicio = flagInicio;
-		pilhaFlagsBlocos[mapAtual].flagFim = flagFim;
-		pilhaFlagsBlocos[mapAtual].flagContadorFor = flagContadorFor;
+		FUN.pilhaFlagsBlocos[FUN.mapAtual].flagInicio = flagInicio;
+		FUN.pilhaFlagsBlocos[FUN.mapAtual].flagFim = flagFim;
+		FUN.pilhaFlagsBlocos[FUN.mapAtual].flagContadorFor = flagContadorFor;
 	}
 
 	string criaVariavelTemp(void) {
@@ -792,12 +935,12 @@ int main( int argc, char* argv[] ) {
 		
 		atributos structRetorno;
 		
-		structRetorno.conteudo = verificaExistencia(id.codigo, mapAtual);
-		string tipo = pegaTipo(id.codigo, mapAtual);
+		structRetorno.conteudo = verificaExistencia(id.codigo, FUN.mapAtual);
+		string tipo = pegaTipo(id.codigo, FUN.mapAtual);
 		structRetorno.tipo = tipo;
 		structRetorno.codigo = "";
 		if (tipo == "str") {
-			string tamanho = pegaTamanho(id.codigo, mapAtual);
+			string tamanho = pegaTamanho(id.codigo, FUN.mapAtual);
 			structRetorno.tamanho = tamanho;
 		} else {
 			structRetorno.tamanho = "";
@@ -823,8 +966,8 @@ int main( int argc, char* argv[] ) {
 
 		int quantosLoopsPossiveis = 0;
 
-		for(int i = mapAtual; i >= 0 ; i--) {
-			if (pilhaFlagsBlocos[i].flagInicio != "" && pilhaFlagsBlocos[i].flagFim != "") {
+		for(int i = FUN.mapAtual; i >= 0 ; i--) {
+			if (FUN.pilhaFlagsBlocos[i].flagInicio != "" && FUN.pilhaFlagsBlocos[i].flagFim != "") {
 				
 				quantosLoopsPossiveis++;
 
@@ -842,21 +985,21 @@ int main( int argc, char* argv[] ) {
 
 	string verificaExistencia(string variavel, int mapBusca){
 		if(mapBusca == 0) {
-			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (FUN.pilhaMaps[mapBusca]).find(variavel);
 
-			if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			if ( linhaDaVariavel == (FUN.pilhaMaps[mapBusca]).end() ){
 				yyerror("Variavel \""+ variavel +"\" não declarada");
 			} else {
-				return (pilhaMaps[mapBusca])[variavel].temporaria;
+				return (FUN.pilhaMaps[mapBusca])[variavel].temporaria;
 			}
 			yyerror("Erro na função de verificação do ID");
 		} else {
-			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
-			if( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (FUN.pilhaMaps[mapBusca]).find(variavel);
+			if( linhaDaVariavel == (FUN.pilhaMaps[mapBusca]).end() ){
 				return verificaExistencia(variavel, mapBusca - 1);
 			}
 			else {
-				return (pilhaMaps[mapBusca])[variavel].temporaria;
+				return (FUN.pilhaMaps[mapBusca])[variavel].temporaria;
 			}
 			yyerror("Erro na função de verificação do ID");
 		}
@@ -866,42 +1009,42 @@ int main( int argc, char* argv[] ) {
 	void adicionaTamanho(string variavel, int mapBusca, string tamanho) {
 
 		if(mapBusca == 0) {
-			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (FUN.pilhaMaps[mapBusca]).find(variavel);
 
-			if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			if ( linhaDaVariavel == (FUN.pilhaMaps[mapBusca]).end() ){
 				yyerror("Variavel \""+ variavel +"\" não declarada");
 			} else {
-				(pilhaMaps[mapBusca])[variavel].tamanho = tamanho;
+				(FUN.pilhaMaps[mapBusca])[variavel].tamanho = tamanho;
 			}
 		} else {
-			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
-			if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (FUN.pilhaMaps[mapBusca]).find(variavel);
+			if ( linhaDaVariavel == (FUN.pilhaMaps[mapBusca]).end() ){
 				adicionaTamanho(variavel, mapBusca - 1, tamanho);
 			}
 			else {
-				(pilhaMaps[mapBusca])[variavel].tamanho = tamanho;
+				(FUN.pilhaMaps[mapBusca])[variavel].tamanho = tamanho;
 			}
 		}
 	}
 
 	string pegaTamanho(string variavel, int mapBusca) {
 		if(mapBusca == 0) {
-			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (FUN.pilhaMaps[mapBusca]).find(variavel);
 
-			if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			if ( linhaDaVariavel == (FUN.pilhaMaps[mapBusca]).end() ){
 				yyerror("Variavel \""+ variavel +"\" não declarada");
 			} else {
-				return (pilhaMaps[mapBusca])[variavel].tamanho;
+				return (FUN.pilhaMaps[mapBusca])[variavel].tamanho;
 			}
 			yyerror("Erro na função de verificação do ID");
 		} else {
-			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (FUN.pilhaMaps[mapBusca]).find(variavel);
 
-			if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			if ( linhaDaVariavel == (FUN.pilhaMaps[mapBusca]).end() ){
 				return pegaTamanho(variavel, mapBusca - 1);
 			}
 			else {
-				return (pilhaMaps[mapBusca])[variavel].tamanho;
+				return (FUN.pilhaMaps[mapBusca])[variavel].tamanho;
 			}
 			yyerror("Erro na função de verificação do ID");
 		}
@@ -910,22 +1053,22 @@ int main( int argc, char* argv[] ) {
 
 	string pegaTipo(string variavel, int mapBusca) {
 		if(mapBusca == 0) {
-			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (FUN.pilhaMaps[mapBusca]).find(variavel);
 
-			if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			if ( linhaDaVariavel == (FUN.pilhaMaps[mapBusca]).end() ){
 				yyerror("Variavel \""+ variavel +"\" não declarada");
 			} else {
-				return (pilhaMaps[mapBusca])[variavel].tipo;
+				return (FUN.pilhaMaps[mapBusca])[variavel].tipo;
 			}
 			yyerror("Erro na função de verificação do ID");
 		} else {
-			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (pilhaMaps[mapBusca]).find(variavel);
+			unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = (FUN.pilhaMaps[mapBusca]).find(variavel);
 
-			if ( linhaDaVariavel == (pilhaMaps[mapBusca]).end() ){
+			if ( linhaDaVariavel == (FUN.pilhaMaps[mapBusca]).end() ){
 				return pegaTipo(variavel, mapBusca - 1);
 			}
 			else {
-				return (pilhaMaps[mapBusca])[variavel].tipo;
+				return (FUN.pilhaMaps[mapBusca])[variavel].tipo;
 			}
 			yyerror("Erro na função de verificação do ID");
 		}
@@ -972,34 +1115,35 @@ int main( int argc, char* argv[] ) {
 	void adicionaNoMap(void) {
 		unordered_map<string, caracteristicas> auxMapGlobal;
 
-		pilhaMaps.push_back(auxMapGlobal);
+		FUN.pilhaMaps.push_back(auxMapGlobal);
 
 		flagsBloco auxFlagMaps;
-		pilhaFlagsBlocos.push_back(auxFlagMaps);
+		FUN.pilhaFlagsBlocos.push_back(auxFlagMaps);
 
-		mapAtual++;
+		FUN.mapAtual++;
 	}
 
 	void retiraDoMap(void) {
-		pilhaMaps.pop_back();
+		FUN.pilhaMaps.pop_back();
 
-		pilhaFlagsBlocos.pop_back();
+		FUN.pilhaFlagsBlocos.pop_back();
 
-		mapAtual--;
+		FUN.mapAtual--;
 	}
+
 
 
 	void atualizaTipoInformacoesSwitch(string tipo) {
 
-		pilhaInformacoesSwitch[informacoesSwitchAtual].tipo = tipo;
+		FUN.pilhaInformacoesSwitch[FUN.informacoesSwitchAtual].tipo = tipo;
 		if(tipo == "bool")
-			mapDeclaracoes[pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria] = "\tint" + pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria + ";\n";
+			FUN.mapDeclaracoes[FUN.pilhaInformacoesSwitch[FUN.informacoesSwitchAtual].temporaria] = "\tint" + FUN.pilhaInformacoesSwitch[FUN.informacoesSwitchAtual].temporaria + ";\n";
 		else if(tipo == "string")
 		{
 			//TODO
 		}
 		else
-			mapDeclaracoes[pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria] = "\t" + tipo + " " + pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria + ";\n";
+			FUN.mapDeclaracoes[FUN.pilhaInformacoesSwitch[FUN.informacoesSwitchAtual].temporaria] = "\t" + tipo + " " + FUN.pilhaInformacoesSwitch[FUN.informacoesSwitchAtual].temporaria + ";\n";
 	}
 
 	void empilhaInformacoesSwitch(void) {
@@ -1008,15 +1152,15 @@ int main( int argc, char* argv[] ) {
 		
 		infos.flagFim = criaFlag();
 		
-		pilhaInformacoesSwitch.push_back(infos);
+		FUN.pilhaInformacoesSwitch.push_back(infos);
 
-		informacoesSwitchAtual++;
+		FUN.informacoesSwitchAtual++;
 	}
 
 	void retiraInformacoesSwitch(void) {
-		pilhaInformacoesSwitch.pop_back();
+		FUN.pilhaInformacoesSwitch.pop_back();
 		
-		informacoesSwitchAtual--;
+		FUN.informacoesSwitchAtual--;
 	}
 
 
@@ -1025,15 +1169,15 @@ int main( int argc, char* argv[] ) {
 		
 		string tamanhoDeclaracao = to_string(calculaTamanhoMaximoString( stoi(tamanhoString) ));
 
-		mapDeclaracoes[variavel] = "\tchar* " + variavel + "=(char*)malloc(" + tamanhoDeclaracao + "*sizeof(char));\n";
+		FUN.mapDeclaracoes[variavel] = "\tchar* " + variavel + "=(char*)malloc(" + tamanhoDeclaracao + "*sizeof(char));\n";
 	}
 
 	void geraCodigoDeclaracaoStringOperacoes(atributos& structVariavelDeclarar , string variavelTamanho1, string variavelTamanho2) {
 
 		string temporariaTamanho = criaVariavelTemp();
 
-		mapDeclaracoes[temporariaTamanho] = "\tint " + temporariaTamanho + ";\n";
-		mapDeclaracoes[structVariavelDeclarar.conteudo] = "\tchar* " + structVariavelDeclarar.conteudo + "=(char*)malloc(50*sizeof(char));\n";	
+		FUN.mapDeclaracoes[temporariaTamanho] = "\tint " + temporariaTamanho + ";\n";
+		FUN.mapDeclaracoes[structVariavelDeclarar.conteudo] = "\tchar* " + structVariavelDeclarar.conteudo + "=(char*)malloc(50*sizeof(char));\n";	
 
 		structVariavelDeclarar.codigo += "\t" + temporariaTamanho + "=" + variavelTamanho1 + "+" + variavelTamanho2 + ";\n";
 		structVariavelDeclarar.codigo += geraCodigoCalculaTamanhoMaximoString(temporariaTamanho, temporariaTamanho);
@@ -1052,9 +1196,9 @@ int main( int argc, char* argv[] ) {
 		string flagInicioLoop = criaFlag();
 		string flagFimLoop = criaFlag();
 
-		mapDeclaracoes[temporariaIf] = "\tint " + temporariaIf + ";\n";
-		mapDeclaracoes[temporariaEscala] = "\tint " + temporariaEscala + ";\n";
-		mapDeclaracoes[temporariaTamanhoEscala] = "\tint " + temporariaTamanhoEscala + ";\n";
+		FUN.mapDeclaracoes[temporariaIf] = "\tint " + temporariaIf + ";\n";
+		FUN.mapDeclaracoes[temporariaEscala] = "\tint " + temporariaEscala + ";\n";
+		FUN.mapDeclaracoes[temporariaTamanhoEscala] = "\tint " + temporariaTamanhoEscala + ";\n";
 
 		codigoRetorno += "\t" + temporariaEscala + "= 4;\n";
 		codigoRetorno += "\t" + temporariaTamanhoEscala + "= 50;\n";
@@ -1096,7 +1240,7 @@ int main( int argc, char* argv[] ) {
 		exit (0);
 	}
 
-// Geradores auxiliares ------------------------------------------------------------------
+// Geradores auxiliares ---------------------------------------------------------------------
 
 	string geraCodigoErroExecucao(string msg, string codigoErro) {
 		return "\tstd::cout <<\"" + msg + "\"<<std::endl;\n\texit("+ codigoErro + ");\n";
@@ -1110,14 +1254,30 @@ int main( int argc, char* argv[] ) {
 		string temporarialComparacaoChar = criaVariavelTemp();
 		string temporariaSinal = criaVariavelTemp();
 		string temporariaPosicao = criaVariavelTemp();
+		string temporariaIfComZero = criaVariavelTemp();
+		string temporariaIfComNove = criaVariavelTemp();
+		string temporariaCondicao = criaVariavelTemp();
+		string temporariaIfInterno = criaVariavelTemp();
+		string temporariaConta = criaVariavelTemp();
+		
+		
 
-		mapDeclaracoes[temporarialCondicaoSinal] = "\tint " + temporarialCondicaoSinal + ";\n";
-		mapDeclaracoes[temporarialComparacaoChar] = "\tchar " + temporarialComparacaoChar + ";\n";
-		mapDeclaracoes[temporariaSinal] = "\tint " + temporariaSinal + ";\n";
-		mapDeclaracoes[temporariaPosicao] = "\tint " + temporariaPosicao + ";\n";
+		FUN.mapDeclaracoes[temporarialCondicaoSinal] = "\tint " + temporarialCondicaoSinal + ";\n";
+		FUN.mapDeclaracoes[temporarialComparacaoChar] = "\tchar " + temporarialComparacaoChar + ";\n";
+		FUN.mapDeclaracoes[temporariaSinal] = "\tint " + temporariaSinal + ";\n";
+		FUN.mapDeclaracoes[temporariaPosicao] = "\tint " + temporariaPosicao + ";\n";
+		FUN.mapDeclaracoes[temporariaCondicao] = "\tint " + temporariaCondicao + ";\n";
+		FUN.mapDeclaracoes[temporariaIfComZero] = "\tchar " + temporariaIfComZero + ";\n";
+		FUN.mapDeclaracoes[temporariaIfComNove] = "\tchar " + temporariaIfComNove + ";\n"; 
+		FUN.mapDeclaracoes[temporariaConta] = "\tint " + temporariaConta + ";\n";
+		FUN.mapDeclaracoes[temporariaIfInterno] = "\tchar " + temporariaIfInterno + ";\n";
 
+		string flagIfInterno = criaFlag();
 		string flagCondiSinal = criaFlag();
 		string flagCondiElseSinal = criaFlag();
+		string flagInicio, flagFim, flagContadorFor;
+
+		criaFlagLoop(flagInicio, flagFim, flagContadorFor);
 
 		codigoCoercao += "\t" + variavelRecebeCoercao + "=0;\n";
 		codigoCoercao += "\t" + temporariaPosicao + "=0;\n";
@@ -1141,13 +1301,6 @@ int main( int argc, char* argv[] ) {
 		codigoCoercao += "\t" + temporariaPosicao + "=" + temporariaPosicao + " + 1;\n";
 		codigoCoercao += flagCondiElseSinal + ":\n";
 
-		string temporariaCondicao = criaVariavelTemp();
-		mapDeclaracoes[temporariaCondicao] = "\tint " + temporariaCondicao + ";\n";
-
-		string flagInicio, flagFim, flagContadorFor;
-
-		criaFlagLoop(flagInicio, flagFim, flagContadorFor);
-
 		codigoCoercao += "\t" + temporariaCondicao + "=" + temporariaPosicao + ";\n";
 		codigoCoercao += "\tgoto " + flagContadorFor + ";\n" + flagInicio + ":\n";
 		codigoCoercao += "\t" + temporariaCondicao + "=" + temporariaCondicao + "+1;\n" + flagContadorFor + ":\n";
@@ -1156,21 +1309,10 @@ int main( int argc, char* argv[] ) {
 		codigoCoercao += "\t" + temporarialCondicaoSinal + "=!" + temporarialCondicaoSinal + ";\n";
 		codigoCoercao += "\tif(" + temporarialCondicaoSinal + ") goto " + flagFim + ";\n";
 
-		string temporariaIfComZero = criaVariavelTemp();
-		string temporariaIfComNove = criaVariavelTemp();
-		mapDeclaracoes[temporariaIfComZero] = "\tchar " + temporariaIfComZero + ";\n";
-		mapDeclaracoes[temporariaIfComNove] = "\tchar " + temporariaIfComNove + ";\n"; 
-
 		codigoCoercao += "\t" + temporarialComparacaoChar + "=" + variavelParaCoercao + "[" + temporariaCondicao + "];\n";
 		codigoCoercao += "\t" + temporariaIfComZero + "=" + temporarialComparacaoChar + ">='0';\n";
 		codigoCoercao += "\t" + temporariaIfComNove + "=" + temporarialComparacaoChar + "<='9';\n";
 		
-		string temporariaIfInterno = criaVariavelTemp();
-		string temporariaConta = criaVariavelTemp();
-		string flagIfInterno = criaFlag();
-		mapDeclaracoes[temporariaConta] = "\tint " + temporariaConta + ";\n";
-		mapDeclaracoes[temporariaIfInterno] = "\tchar " + temporariaIfInterno + ";\n";
-
 		codigoCoercao += "\t" + temporariaIfInterno + "=" + temporariaIfComZero + " && " + temporariaIfComNove + ";\n";
 
 		codigoCoercao += "\t" + temporariaIfInterno + "=!" + temporariaIfInterno + ";\n";
@@ -1204,15 +1346,15 @@ int main( int argc, char* argv[] ) {
 		string temporariaCoercao = criaVariavelTemp();
 		string temporariaValorNumero = criaVariavelTemp();
 
-		mapDeclaracoes[temporariaValorInteiro] = "\tfloat " + temporariaValorInteiro + ";\n";
-		mapDeclaracoes[temporariaExpoente] = "\tfloat " + temporariaExpoente + ";\n";
-		mapDeclaracoes[temporariaPosicao] = "\tint " + temporariaPosicao + ";\n";
-		mapDeclaracoes[temporariaPonto] = "\tint " + temporariaPonto + ";\n";
-		mapDeclaracoes[temporariaValorPosicao] = "\tchar " + temporariaValorPosicao + ";\n";
-		mapDeclaracoes[temporariaIfs] = "\tint " + temporariaIfs + ";\n"; 
-		mapDeclaracoes[temporariaIfComposto] = "\tint " + temporariaIfComposto + ";\n";
-		mapDeclaracoes[temporariaCoercao] = "\tfloat " + temporariaCoercao + ";\n";
-		mapDeclaracoes[temporariaValorNumero] = "\tint " + temporariaValorNumero + ";\n";
+		FUN.mapDeclaracoes[temporariaValorInteiro] = "\tfloat " + temporariaValorInteiro + ";\n";
+		FUN.mapDeclaracoes[temporariaExpoente] = "\tfloat " + temporariaExpoente + ";\n";
+		FUN.mapDeclaracoes[temporariaPosicao] = "\tint " + temporariaPosicao + ";\n";
+		FUN.mapDeclaracoes[temporariaPonto] = "\tint " + temporariaPonto + ";\n";
+		FUN.mapDeclaracoes[temporariaValorPosicao] = "\tchar " + temporariaValorPosicao + ";\n";
+		FUN.mapDeclaracoes[temporariaIfs] = "\tint " + temporariaIfs + ";\n"; 
+		FUN.mapDeclaracoes[temporariaIfComposto] = "\tint " + temporariaIfComposto + ";\n";
+		FUN.mapDeclaracoes[temporariaCoercao] = "\tfloat " + temporariaCoercao + ";\n";
+		FUN.mapDeclaracoes[temporariaValorNumero] = "\tint " + temporariaValorNumero + ";\n";
 
 		string codigoRetorno = "// ------------Codigo de coercao string para float------------\n";
 
@@ -1248,7 +1390,7 @@ int main( int argc, char* argv[] ) {
 		string flagContador = criaFlag();
 		string flagErro = criaFlag();
 
-		codigoRetorno += flag2 + ":\ngoto " + flagContador + ";\n" + flagInicio + ":\n";
+		codigoRetorno += flag2 + ":\n\tgoto " + flagContador + ";\n" + flagInicio + ":\n";
 		codigoRetorno += "\t" + temporariaPosicao + "=" + temporariaPosicao + "+1;\n" + flagContador + ":\n";
 		codigoRetorno += "\t" + temporariaIfs + "=" + temporariaPosicao + "<" + tamanho + ";\n";
 		codigoRetorno += "\t" + temporariaIfs + "=!" + temporariaIfs + ";\n";
@@ -1300,7 +1442,7 @@ int main( int argc, char* argv[] ) {
 		string tuplaCoercaoOrigem[3];
 		string tuplaCoercaoDestino[2];
 
-		if(operacao == "atribuicao" || operacao == "declaracao")
+		if(operacao == "atribuicao" || operacao == "declaracao" || operacao == "declaracaoParametro" ||  operacao == "return")
 			tuplaCoercaoDestino[0] = regraCoercao(elementoUm.tipo, elementoDois.tipo, "=");
 		else if(operacao == "switch")
 			tuplaCoercaoDestino[0] = regraCoercao(elementoUm.tipo, elementoDois.tipo, "==");
@@ -1313,9 +1455,9 @@ int main( int argc, char* argv[] ) {
 		structRetorno.tipo = tuplaCoercaoDestino[0];
 
 		if(structRetorno.conteudo != "")
-			mapDeclaracoes[structRetorno.conteudo] = "\t" + tuplaCoercaoDestino[0] + " " + structRetorno.conteudo + ";\n";
+			FUN.mapDeclaracoes[structRetorno.conteudo] = "\t" + tuplaCoercaoDestino[0] + " " + structRetorno.conteudo + ";\n";
 		
-		mapDeclaracoes[variavelRecebeCoercao] = "\t" + tuplaCoercaoDestino[0] + " " + variavelRecebeCoercao + ";\n";
+		FUN.mapDeclaracoes[variavelRecebeCoercao] = "\t" + tuplaCoercaoDestino[0] + " " + variavelRecebeCoercao + ";\n";
 
 		if(tuplaCoercaoDestino[0] == elementoUm.tipo) {
 			tuplaCoercaoOrigem[0] = elementoDois.tipo;
@@ -1350,12 +1492,18 @@ int main( int argc, char* argv[] ) {
 			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao + "\t" + structRetorno.conteudo + "=" + variavelRecebeCoercao + operacao + tuplaCoercaoDestino[1] + ";\n";
 		} else if(operacao == "declaracao") {
 			structRetorno.codigo = elementoDois.codigo + codigoCoercao + "\t" + criaInstanciaTabela(elementoUm.codigo, elementoUm.tipo) + "=" + variavelRecebeCoercao + ";\n";
+		} else if(operacao == "declaracaoParametro"){
+			string aux = criaInstanciaTabelaParametro(elementoUm.codigo, elementoUm.tipo);
+			FUN.parametrosOpcionais.push_back(aux);
+			structRetorno.codigo = elementoDois.codigo + codigoCoercao + "\t" + aux + "=" + variavelRecebeCoercao + ";\n";
 		} else if(operacao == "atribuicao") {
 			structRetorno.codigo = elementoDois.codigo + codigoCoercao + "\t" + tuplaCoercaoDestino[1] + "=" + variavelRecebeCoercao + ";\n";
 		} else if(operacao == "*=" || operacao == "/=" || operacao == "+=" || operacao == "-=" || operacao == "%=") {
 			structRetorno.codigo = elementoDois.codigo + codigoCoercao + "\t" + tuplaCoercaoDestino[1] + "=" + tuplaCoercaoDestino[1] + operacao[0] + variavelRecebeCoercao + ";\n";
 		} else if(operacao == "switch") {
 			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + codigoCoercao + "\t" + structRetorno.conteudo + "=" + variavelRecebeCoercao + "==" + tuplaCoercaoDestino[1] + ";\n";
+		} else if(operacao == "return") {
+			structRetorno.codigo = elementoDois.codigo + codigoCoercao + "\treturn " + variavelRecebeCoercao + ";\n"; 
 		}
 		
 	}
@@ -1365,9 +1513,9 @@ int main( int argc, char* argv[] ) {
 	atributos geraCodigoAtribuicao(atributos elementoUm, atributos elementoDois) {
 		atributos structRetorno;
 
-		string temporariaDaVariavel = verificaExistencia(elementoUm.codigo, mapAtual);
-		string tipoTemporariaDaVariavel = pegaTipo(elementoUm.codigo, mapAtual);
-		string tamanho = pegaTamanho(elementoUm.codigo, mapAtual);
+		string temporariaDaVariavel = verificaExistencia(elementoUm.codigo, FUN.mapAtual);
+		string tipoTemporariaDaVariavel = pegaTipo(elementoUm.codigo, FUN.mapAtual);
+		string tamanho = pegaTamanho(elementoUm.codigo, FUN.mapAtual);
 
 		elementoUm.tipo = tipoTemporariaDaVariavel;
 		elementoUm.conteudo = temporariaDaVariavel;
@@ -1400,8 +1548,8 @@ int main( int argc, char* argv[] ) {
 		string temporariaTamanhoNaTabela = elementoDestido.tamanho;
 		string temporariaTamanhoMaximo = criaVariavelTemp();
 
-		mapDeclaracoes[temporariaIf] = "\tint " + temporariaIf + ";\n";
-		mapDeclaracoes[temporariaTamanhoMaximo] = "\tint " + temporariaTamanhoMaximo + ";\n";
+		FUN.mapDeclaracoes[temporariaIf] = "\tint " + temporariaIf + ";\n";
+		FUN.mapDeclaracoes[temporariaTamanhoMaximo] = "\tint " + temporariaTamanhoMaximo + ";\n";
 
 		structRetorno.codigo = elementoOrigem.codigo;
 		structRetorno.codigo += geraCodigoCalculaTamanhoMaximoString(elementoDestido.tamanho, temporariaTamanhoMaximo);
@@ -1416,7 +1564,7 @@ int main( int argc, char* argv[] ) {
 		structRetorno.codigo += "\tstrcpy(" + elementoDestido.conteudo + "," + elementoOrigem.conteudo + ");\n";
 
 		structRetorno.tamanho = elementoOrigem.tamanho;
-		adicionaTamanho(elementoDestido.codigo, mapAtual, elementoOrigem.tamanho);
+		adicionaTamanho(elementoDestido.codigo, FUN.mapAtual, elementoOrigem.tamanho);
 
 		return structRetorno;
 	}
@@ -1424,8 +1572,8 @@ int main( int argc, char* argv[] ) {
 	atributos geraCodigoAtribuicaoComposta(atributos elementoUm, atributos elementoDois, string operacao) {
 		atributos structRetorno;
 
-		string aux = verificaExistencia(elementoUm.codigo, mapAtual);
-		string tipoAux = pegaTipo(elementoUm.codigo, mapAtual);
+		string aux = verificaExistencia(elementoUm.codigo, FUN.mapAtual);
+		string tipoAux = pegaTipo(elementoUm.codigo, FUN.mapAtual);
 
 		structRetorno.conteudo = aux;
 		structRetorno.tipo = "ope";
@@ -1444,7 +1592,7 @@ int main( int argc, char* argv[] ) {
 		return structRetorno;
 	}
 
-// Geradores de declaracoes ------------------------------------------------------------------
+// Geradores de declaracoes -----------------------------------------------------------------
 
 	atributos geraCodigoDeclaComExp(atributos elementoUm, atributos elementoDois, string tipo) {
 		atributos structRetorno;
@@ -1461,12 +1609,12 @@ int main( int argc, char* argv[] ) {
 				structRetorno.tipo = elementoUm.tipo;
 
 				structRetorno.tamanho = criaVariavelTemp();
-				mapDeclaracoes[structRetorno.tamanho] = "\tint " + structRetorno.tamanho + ";\n";
+				FUN.mapDeclaracoes[structRetorno.tamanho] = "\tint " + structRetorno.tamanho + ";\n";
 
 				structRetorno.codigo += elementoDois.codigo;
 				structRetorno.codigo += geraCodigoCalculaTamanhoMaximoString(elementoDois.tamanho, structRetorno.tamanho);
 				structRetorno.codigo += "\tstrcpy(" + aux + "," + elementoDois.conteudo + ");\n";
-				adicionaTamanho(elementoUm.codigo, mapAtual, elementoDois.tamanho);
+				adicionaTamanho(elementoUm.codigo, FUN.mapAtual, elementoDois.tamanho);
 			}
 			else
 			{
@@ -1491,7 +1639,7 @@ int main( int argc, char* argv[] ) {
 		return structRetorno;
 	}
 
-// Geradores de exprecoes ------------------------------------------------------------------
+// Geradores de exprecoes -------------------------------------------------------------------
 
 	atributos geraCodigoValores(atributos elemento) {
 		atributos structRetorno;
@@ -1500,20 +1648,20 @@ int main( int argc, char* argv[] ) {
 		structRetorno.tipo = elemento.tipo;
 		if(structRetorno.tipo == "bool")
 		{
-			mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
+			FUN.mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
 			structRetorno.codigo = "\t" + structRetorno.conteudo + "=" + elemento.codigo + ";\n";
 		} else if (structRetorno.tipo == "str") {
 			geraCodigoDeclaracaoString(structRetorno.conteudo, elemento.tamanho);
 			
 			string temporariaTamanho = criaVariavelTemp();
 
-			mapDeclaracoes[temporariaTamanho] = "\tint " + temporariaTamanho + ";\n";
+			FUN.mapDeclaracoes[temporariaTamanho] = "\tint " + temporariaTamanho + ";\n";
 			
 			structRetorno.codigo += "\t" + temporariaTamanho + "=" + elemento.tamanho + ";\n";
 			structRetorno.codigo += "\tstrcpy(" + structRetorno.conteudo + "," + elemento.codigo + ");\n";
 			structRetorno.tamanho = temporariaTamanho;
 		} else {
-			mapDeclaracoes[structRetorno.conteudo] = "\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n";
+			FUN.mapDeclaracoes[structRetorno.conteudo] = "\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n";
 			structRetorno.codigo = "\t" + structRetorno.conteudo + "=" + elemento.codigo + ";\n";
 		}
 
@@ -1529,12 +1677,12 @@ int main( int argc, char* argv[] ) {
 
 		if(tipo == "bool")
 		{
-			mapDeclaracoes[structRetorno.conteudo] = "\tint" + structRetorno.conteudo + ";\n";
+			FUN.mapDeclaracoes[structRetorno.conteudo] = "\tint" + structRetorno.conteudo + ";\n";
 			structRetorno.codigo = elemento.codigo + "\t" + structRetorno.conteudo + "=(int)" + elemento.conteudo + ";\n";
 		}
 		else
 		{
-			mapDeclaracoes[structRetorno.conteudo] = "\t" + tipo + " " + structRetorno.conteudo + ";\n";
+			FUN.mapDeclaracoes[structRetorno.conteudo] = "\t" + tipo + " " + structRetorno.conteudo + ";\n";
 			structRetorno.codigo = elemento.codigo + "\t" + structRetorno.conteudo + "=(" + structRetorno.tipo + ")" + elemento.conteudo + ";\n";
 		}
 		return structRetorno;
@@ -1561,7 +1709,7 @@ int main( int argc, char* argv[] ) {
 				structRetorno.codigo += "\tstrcpy(" + structRetorno.conteudo + "," + elementoUm.conteudo + ");\n";
 				structRetorno.codigo += "\tstrcat(" + structRetorno.conteudo + "," + elementoDois.conteudo + ");\n";
 			} else {
-				mapDeclaracoes[structRetorno.conteudo] = "\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n";
+				FUN.mapDeclaracoes[structRetorno.conteudo] = "\t" + structRetorno.tipo + " " + structRetorno.conteudo + ";\n";
 				structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + operacao + elementoDois.conteudo + ";\n";
 			}
 		}
@@ -1581,7 +1729,7 @@ int main( int argc, char* argv[] ) {
 
 		structRetorno.conteudo = criaVariavelTemp();
 
-		mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
+		FUN.mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
 
 		structRetorno.codigo = elemento.codigo + "\t" + structRetorno.conteudo + "=!" + elemento.conteudo + ";\n";
 		
@@ -1595,7 +1743,7 @@ int main( int argc, char* argv[] ) {
 		
 		structRetorno.conteudo = criaVariavelTemp();
 
-		mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
+		FUN.mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
 
 		if(operacao =="or")
 			structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=" + elementoUm.conteudo + "||" + elementoDois.conteudo + ";\n";
@@ -1614,7 +1762,7 @@ int main( int argc, char* argv[] ) {
 		structRetorno.conteudo = criaVariavelTemp();
 		structRetorno.tipo = "bool";
 
-		mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
+		FUN.mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
 
 		if(elementoUm.tipo == elementoDois.tipo)
 		{
@@ -1631,7 +1779,7 @@ int main( int argc, char* argv[] ) {
 				structRetorno.codigo += "\t" + structRetorno.conteudo + "=" + structRetorno.conteudo + ">0;\n";
 			} else if(operacao == ">=") {
 				string temporariaAuxOperacao = criaVariavelTemp();
-				mapDeclaracoes[temporariaAuxOperacao] = "\tint " + temporariaAuxOperacao + ";\n";
+				FUN.mapDeclaracoes[temporariaAuxOperacao] = "\tint " + temporariaAuxOperacao + ";\n";
 
 				structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=strcmp(" + elementoUm.conteudo + "," + elementoDois.conteudo + ");\n";
 				structRetorno.codigo += "\t" + temporariaAuxOperacao + "=" + structRetorno.conteudo + ">0;\n";
@@ -1639,7 +1787,7 @@ int main( int argc, char* argv[] ) {
 				structRetorno.codigo += "\t" + structRetorno.conteudo + "=" + structRetorno.conteudo + "||" + temporariaAuxOperacao + ";\n";
 			} else if(operacao == "<=") {
 				string temporariaAuxOperacao = criaVariavelTemp();
-				mapDeclaracoes[temporariaAuxOperacao] = "\tint " + temporariaAuxOperacao + ";\n";
+				FUN.mapDeclaracoes[temporariaAuxOperacao] = "\tint " + temporariaAuxOperacao + ";\n";
 				
 				structRetorno.codigo = elementoUm.codigo + elementoDois.codigo + "\t" + structRetorno.conteudo + "=strcmp(" + elementoUm.conteudo + "," + elementoDois.conteudo + ");\n";
 				structRetorno.codigo += "\t" + temporariaAuxOperacao + "=" + structRetorno.conteudo + "<0;\n";
@@ -1666,7 +1814,7 @@ int main( int argc, char* argv[] ) {
 		structRetorno.conteudo = criaVariavelTemp();
 
 		if(exprecao.tipo == "str") {
-			mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
+			FUN.mapDeclaracoes[structRetorno.conteudo] = "\tint " + structRetorno.conteudo + ";\n";
 			structRetorno.codigo = "\t" + structRetorno.conteudo + "=" + exprecao.tamanho + ";\n";
 		} else {
 			yyerror("operador len só existe para strings");
@@ -1686,7 +1834,7 @@ int main( int argc, char* argv[] ) {
 		
 		structRetorno.conteudo = auxCondicao;
 
-		mapDeclaracoes[auxCondicao] = "\tint " + auxCondicao + ";\n";
+		FUN.mapDeclaracoes[auxCondicao] = "\tint " + auxCondicao + ";\n";
 
 		string auxFlag = criaFlag();
 
@@ -1748,10 +1896,10 @@ int main( int argc, char* argv[] ) {
 		structRetorno.tipo = "input";
 		structRetorno.conteudo = "";
 		if( variaveis.tipo == "id") {
-			if(pegaTipo(variaveis.codigo, mapAtual) == "str") {
+			if(pegaTipo(variaveis.codigo, FUN.mapAtual) == "str") {
 				structRetorno.codigo = geraCodigoInputString(variaveis) + ";\n";
 			} else {
-				structRetorno.codigo = "\tstd::cin >> " + verificaExistencia(variaveis.codigo, mapAtual) + ";\n\tgetchar();\n";
+				structRetorno.codigo = "\tstd::cin >> " + verificaExistencia(variaveis.codigo, FUN.mapAtual) + ";\n\tgetchar();\n";
 			}
 		} else {
 			structRetorno.codigo = variaveis.codigo;
@@ -1762,7 +1910,7 @@ int main( int argc, char* argv[] ) {
 
 	string geraCodigoInputString(atributos variavel) {
 
-		string temporariaVariavel = verificaExistencia(variavel.codigo, mapAtual);
+		string temporariaVariavel = verificaExistencia(variavel.codigo, FUN.mapAtual);
 		string temporariaPegarChar = criaVariavelTemp();
 		string temporariaTamanho = criaVariavelTemp();
 		string temporariaInterador = criaVariavelTemp();
@@ -1772,17 +1920,17 @@ int main( int argc, char* argv[] ) {
 		string temporariaEscala = criaVariavelTemp();
 		string temporariaIf = criaVariavelTemp();
 		string temporariaTamanhoMaximo = criaVariavelTemp();
-		string temporariaTamanhoNaTabela = pegaTamanho(variavel.codigo, mapAtual);
+		string temporariaTamanhoNaTabela = pegaTamanho(variavel.codigo, FUN.mapAtual);
 
-		mapDeclaracoes[temporariaEscalaDois] = "\tint " + temporariaEscalaDois + ";\n";
-		mapDeclaracoes[temporariaIf] = "\tint " + temporariaIf + ";\n";
-		mapDeclaracoes[temporariaConta] = "\tint " + temporariaConta + ";\n";
-		mapDeclaracoes[temporariaTamanho] = "\tint " + temporariaTamanho + ";\n";
-		mapDeclaracoes[temporariaEscala] = "\tint " + temporariaEscala + ";\n";
-		mapDeclaracoes[temporariaInterador] = "\tint " + temporariaInterador + ";\n";
-		mapDeclaracoes[temporariaLocalString] = "\tint " + temporariaLocalString + ";\n";
-		mapDeclaracoes[temporariaPegarChar] = "\tchar " + temporariaPegarChar + ";\n";
-		mapDeclaracoes[temporariaTamanhoMaximo] = "\tint " + temporariaTamanhoMaximo + ";\n";
+		FUN.mapDeclaracoes[temporariaEscalaDois] = "\tint " + temporariaEscalaDois + ";\n";
+		FUN.mapDeclaracoes[temporariaIf] = "\tint " + temporariaIf + ";\n";
+		FUN.mapDeclaracoes[temporariaConta] = "\tint " + temporariaConta + ";\n";
+		FUN.mapDeclaracoes[temporariaTamanho] = "\tint " + temporariaTamanho + ";\n";
+		FUN.mapDeclaracoes[temporariaEscala] = "\tint " + temporariaEscala + ";\n";
+		FUN.mapDeclaracoes[temporariaInterador] = "\tint " + temporariaInterador + ";\n";
+		FUN.mapDeclaracoes[temporariaLocalString] = "\tint " + temporariaLocalString + ";\n";
+		FUN.mapDeclaracoes[temporariaPegarChar] = "\tchar " + temporariaPegarChar + ";\n";
+		FUN.mapDeclaracoes[temporariaTamanhoMaximo] = "\tint " + temporariaTamanhoMaximo + ";\n";
 
 		string codigoLeitura = "//---------------------Codigo de input string ----------------------------\n";
 
@@ -1828,25 +1976,25 @@ int main( int argc, char* argv[] ) {
 		structRetorno.conteudo = "";
 
 		if(isStructVazia(id2)) {
-			string tipoId = pegaTipo(id.codigo, mapAtual);
+			string tipoId = pegaTipo(id.codigo, FUN.mapAtual);
 
 			if (tipoId == "str") {
 				structRetorno.codigo = geraCodigoInputString(id) + outrosIds.codigo;
 			} else {
-				structRetorno.codigo = "\tstd::cin >> " +  verificaExistencia(id.codigo, mapAtual) + ";\n" + "\tgetchar();\n" + outrosIds.codigo;
+				structRetorno.codigo = "\tstd::cin >> " +  verificaExistencia(id.codigo, FUN.mapAtual) + ";\n" + "\tgetchar();\n" + outrosIds.codigo;
 			}
 		} else {
-			string tipoId = pegaTipo(id.codigo, mapAtual);
-			string tipoId2 = pegaTipo(id2.codigo, mapAtual);
+			string tipoId = pegaTipo(id.codigo, FUN.mapAtual);
+			string tipoId2 = pegaTipo(id2.codigo, FUN.mapAtual);
 
 			if (tipoId == "str" && tipoId2 == "str") {
 				structRetorno.codigo = geraCodigoInputString(id) + geraCodigoInputString(id2) + outrosIds.codigo;
 			} else if(tipoId == "str") {
-				structRetorno.codigo = geraCodigoInputString(id) + "\tstd::cin >> " + verificaExistencia(id2.codigo, mapAtual) + ";\n\tgetchar();\n" + outrosIds.codigo;
+				structRetorno.codigo = geraCodigoInputString(id) + "\tstd::cin >> " + verificaExistencia(id2.codigo, FUN.mapAtual) + ";\n\tgetchar();\n" + outrosIds.codigo;
 			} else if(tipoId2 == "str") {
-				structRetorno.codigo = "\tstd::cin >> " + verificaExistencia(id.codigo, mapAtual) + ";\n\tgetchar();\n" + geraCodigoInputString(id2) + outrosIds.codigo;
+				structRetorno.codigo = "\tstd::cin >> " + verificaExistencia(id.codigo, FUN.mapAtual) + ";\n\tgetchar();\n" + geraCodigoInputString(id2) + outrosIds.codigo;
 			} else {
-				structRetorno.codigo = "\tstd::cin >> " +  verificaExistencia(id.codigo, mapAtual) + ";\n\tgetchar();\n\tstd::cin >> " + verificaExistencia(id2.codigo, mapAtual) + ";\n\tgetchar();\n" + outrosIds.codigo;
+				structRetorno.codigo = "\tstd::cin >> " +  verificaExistencia(id.codigo, FUN.mapAtual) + ";\n\tgetchar();\n\tstd::cin >> " + verificaExistencia(id2.codigo, FUN.mapAtual) + ";\n\tgetchar();\n" + outrosIds.codigo;
 			}
 		}
 
@@ -1863,10 +2011,10 @@ int main( int argc, char* argv[] ) {
 		
 		structRetorno.conteudo = auxCondicao;
 
-		mapDeclaracoes[auxCondicao] = "\tint " + auxCondicao + ";\n";
+		FUN.mapDeclaracoes[auxCondicao] = "\tint " + auxCondicao + ";\n";
 
-		string flagInicio = pilhaFlagsBlocos[mapAtual].flagInicio;
-		string flagFim = pilhaFlagsBlocos[mapAtual].flagFim;
+		string flagInicio = FUN.pilhaFlagsBlocos[FUN.mapAtual].flagInicio;
+		string flagFim = FUN.pilhaFlagsBlocos[FUN.mapAtual].flagFim;
 		
 		string tipo = regraCoercao("bool",exprecao.tipo,"=");
 
@@ -1886,11 +2034,11 @@ int main( int argc, char* argv[] ) {
 		
 		structRetorno.conteudo = auxCondicao;
 
-		mapDeclaracoes[auxCondicao] = "\tint " + auxCondicao + ";\n";
+		FUN.mapDeclaracoes[auxCondicao] = "\tint " + auxCondicao + ";\n";
 
-		string flagInicio = pilhaFlagsBlocos[mapAtual].flagInicio;
-		string flagFim = pilhaFlagsBlocos[mapAtual].flagFim;
-		string flagContadorFor = pilhaFlagsBlocos[mapAtual].flagContadorFor;
+		string flagInicio = FUN.pilhaFlagsBlocos[FUN.mapAtual].flagInicio;
+		string flagFim = FUN.pilhaFlagsBlocos[FUN.mapAtual].flagFim;
+		string flagContadorFor = FUN.pilhaFlagsBlocos[FUN.mapAtual].flagContadorFor;
 
 		string tipo = regraCoercao("bool",exprecaoDois.tipo,"=");
 
@@ -1915,10 +2063,10 @@ int main( int argc, char* argv[] ) {
 			
 			checaLoopsPossiveis(quantosLoops);
 			
-			structRetorno.codigo = "\tgoto " + pilhaFlagsBlocos[mapAtual - quantosLoops + 1].flagFim + ";\n";
+			structRetorno.codigo = "\tgoto " + FUN.pilhaFlagsBlocos[FUN.mapAtual - quantosLoops + 1].flagFim + ";\n";
 		} else {
 			checaLoopsPossiveis(1);
-			structRetorno.codigo = "\tgoto " + pilhaFlagsBlocos[mapAtual].flagFim + ";\n";
+			structRetorno.codigo = "\tgoto " + FUN.pilhaFlagsBlocos[FUN.mapAtual].flagFim + ";\n";
 		}
 
 		return structRetorno;
@@ -1935,10 +2083,10 @@ int main( int argc, char* argv[] ) {
 			
 			checaLoopsPossiveis(quantosLoops);
 			
-			structRetorno.codigo = "\tgoto " + pilhaFlagsBlocos[mapAtual - quantosLoops + 1].flagInicio + ";\n";
+			structRetorno.codigo = "\tgoto " + FUN.pilhaFlagsBlocos[FUN.mapAtual - quantosLoops + 1].flagInicio + ";\n";
 		} else {
 			checaLoopsPossiveis(1);
-			structRetorno.codigo = "\tgoto " + pilhaFlagsBlocos[mapAtual].flagInicio + ";\n";
+			structRetorno.codigo = "\tgoto " + FUN.pilhaFlagsBlocos[FUN.mapAtual].flagInicio + ";\n";
 		}
 
 		return structRetorno;
@@ -1953,12 +2101,12 @@ int main( int argc, char* argv[] ) {
 		structRetorno.tamanho = "";
 		structRetorno.conteudo = auxCondicao;
 
-		string tipoTempSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].tipo;
-		string temporariaSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria;
-		string tamanhoTemporariaSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].tamanho;
+		string tipoTempSwitch = FUN.pilhaInformacoesSwitch[FUN.informacoesSwitchAtual].tipo;
+		string temporariaSwitch = FUN.pilhaInformacoesSwitch[FUN.informacoesSwitchAtual].temporaria;
+		string tamanhoTemporariaSwitch = FUN.pilhaInformacoesSwitch[FUN.informacoesSwitchAtual].tamanho;
 
 		if(tipoTempSwitch == exprecao.tipo) {
-			mapDeclaracoes[auxCondicao] = "\tint " + auxCondicao + ";\n";
+			FUN.mapDeclaracoes[auxCondicao] = "\tint " + auxCondicao + ";\n";
 			if(exprecao.tipo != "string")
 				structRetorno.codigo = exprecao.codigo + "\t" + auxCondicao + "=" + exprecao.conteudo + "==" + temporariaSwitch + ";\n\t" + auxCondicao + "=!" + auxCondicao + ";\n";
 			else
@@ -1976,7 +2124,7 @@ int main( int argc, char* argv[] ) {
 		string auxFlag = criaFlag();
 		structRetorno.codigo += "\tif(" + auxCondicao + ")\n\t  goto " + auxFlag + ";\n";
 		
-		string flagFinalSwitch = pilhaInformacoesSwitch[informacoesSwitchAtual].flagFim;
+		string flagFinalSwitch = FUN.pilhaInformacoesSwitch[FUN.informacoesSwitchAtual].flagFim;
 		structRetorno.codigo += bloco.codigo + "\tgoto " + flagFinalSwitch + ";\n" + auxFlag + ":\n";
 
 		return structRetorno;
@@ -1989,7 +2137,7 @@ int main( int argc, char* argv[] ) {
 		structRetorno.tamanho = "";
 		structRetorno.conteudo = "";
 
-		string temporaria = pilhaInformacoesSwitch[informacoesSwitchAtual].temporaria;
+		string temporaria = FUN.pilhaInformacoesSwitch[FUN.informacoesSwitchAtual].temporaria;
 
 		structRetorno.codigo = exprecao.codigo + "\t" + temporaria + "=" + exprecao.conteudo + ";\n" + cases.codigo;
 
@@ -1997,10 +2145,338 @@ int main( int argc, char* argv[] ) {
 			structRetorno.codigo += defaul.codigo;
 		}
 
-		structRetorno.codigo += pilhaInformacoesSwitch[informacoesSwitchAtual].flagFim + ":\n";
+		structRetorno.codigo += FUN.pilhaInformacoesSwitch[FUN.informacoesSwitchAtual].flagFim + ":\n";
 
 		return structRetorno;
 	}
 
+// Geradores Funcao --------------------------------------------------------------------------
+	void adicionaNoMapFuncoes(void) {
+		caracteristicasFuncao auxEmpilhar;
+		
+		pilhaFuncao.push_back(auxEmpilhar);
+		funcaoAtual++;
+	}
 
-// ------------------------------------------------------------------
+	void retiraDoMapFuncoes(void) {
+		pilhaFuncao.pop_back();
+		funcaoAtual--;
+	}
+
+	atributos geraCodigoExpreDeclaraFuncao(atributos exprecao, atributos outrasExprecoes) {
+		vector<identificadorFuncao> auxIdentifica = auxChamadaFuncao.back();
+		int auxQualPara = auxQualParametro.back();
+		bool teveMatch = false;
+
+		atributos structRetorno;
+
+		cout << "aqui geraCodigoExpreDeclaraFuncao "<< auxQualPara << " " << exprecao.tipo <<endl;
+
+		for(auto identificador : auxIdentifica) {
+			cout << "tipos -------" << endl;
+			for(auto tipo : identificador.tipoParametros) {
+				cout << tipo << " ";
+			}
+			cout << endl;
+		}
+
+		for(int i = 0; i < auxIdentifica.size(); i++) {
+			if(auxIdentifica[i].tipoParametros[auxQualPara] == exprecao.tipo) {
+				auxQualParametro.back() += 1;
+				teveMatch = true;
+			} else {
+				(auxChamadaFuncao[auxChamadaFuncao.size()-1]).erase((auxChamadaFuncao[auxChamadaFuncao.size()-1]).begin() + i);
+			}
+		}
+		cout << auxQualParametro.back() << endl;
+		if(teveMatch) {
+			if(isStructVazia(outrasExprecoes)) {
+				structRetorno.codigo += exprecao.codigo;
+				structRetorno.conteudo += exprecao.conteudo;
+			} else {
+				structRetorno.codigo += exprecao.codigo + outrasExprecoes.codigo;
+				structRetorno.conteudo += exprecao.conteudo + ',' + outrasExprecoes.conteudo;
+			}
+		} else {
+			yyerror("Não foi possivel encontrar sobrecarga para a função.");
+		}
+
+		return structRetorno;
+	}
+
+	atributos geraCodigoChamadaFuncao(atributos id, atributos parametros) {
+		identificadorFuncao auxIdentifica = (auxChamadaFuncao.back())[0];
+		int auxQualParame = auxQualParametro.back();
+
+		atributos structRetorno;
+
+		if(auxQualParame < auxIdentifica.posicaoInicioOpcionais) {
+			yyerror("faltam parametros na função \"" + id.codigo + "\"");
+		}
+
+		structRetorno.conteudo = parametros.conteudo;
+
+		for(int i = auxQualParame; i < auxIdentifica.tipoParametros.size(); i++) {
+			string temporaria = criaVariavelTemp();
+			if(auxIdentifica.tipoParametros[i] == "bool")
+				FUN.mapDeclaracoes[temporaria] = "\tint " + temporaria + ";\n";
+			else if (auxIdentifica.tipoParametros[i] == "str")
+				FUN.mapDeclaracoes[temporaria] = "\tchar* " + temporaria + ";\n";
+			else
+				FUN.mapDeclaracoes[temporaria] = "\t" + auxIdentifica.tipoParametros[i] + " " + temporaria + ";\n";
+
+			structRetorno.conteudo += "," + temporaria;
+		}
+
+		structRetorno.codigo += parametros.codigo;
+		structRetorno.conteudo = auxIdentifica.temporaria + "(" + structRetorno.conteudo + ")";
+
+		return structRetorno;
+	}
+
+	atributos geraCodigoChamadaFuncaoComando(atributos id, atributos parametros) {
+		
+		atributos structRetorno;
+
+		structRetorno = geraCodigoChamadaFuncao(id, parametros);
+
+		structRetorno.codigo += "\t" + structRetorno.conteudo + ";\n";
+
+		return structRetorno;
+	}
+
+	void verificaExistenciaFuncao(string id, int funcaoBusca) {
+		if(pilhaFuncao[funcaoBusca].mapFuncoes.find(id) == pilhaFuncao[funcaoBusca].mapFuncoes.end()) {
+			if(funcaoBusca == 0)
+				yyerror("Função \"" + id + "\" não foi declarada nesse escopo.");
+			else {
+				verificaExistenciaFuncao(id, funcaoBusca - 1);
+			}
+				
+		} else {
+			vector<identificadorFuncao> temporariaIdentificador = pilhaFuncao[funcaoBusca].mapFuncoes[id];
+			auxChamadaFuncao.push_back(temporariaIdentificador);
+			auxQualParametro.push_back(0);
+		}
+	}
+
+	atributos geraCodigoReturn(atributos exprecao) {
+		atributos structRetorno;
+		
+		atributos elementoUm;
+		
+		elementoUm.tipo = FUN.tipoReturn;
+
+		if(elementoUm.tipo == exprecao.tipo)
+			structRetorno.codigo = exprecao.codigo + "\treturn " + exprecao.conteudo + ";\n";
+		else {
+			geraCodigoCoercao(structRetorno, elementoUm, exprecao, "return");
+		}
+
+		FUN.semRetorno = false;
+
+		return structRetorno;
+	}
+
+	string geraCodigoParametros(string outrosParametros, string tipo, atributos id, atributos exprecao) {
+		string stringRetorno;
+		if(outrosParametros != "") {
+			if(isStructVazia(exprecao)) {
+				stringRetorno = outrosParametros;
+				FUN.parametros.push_back(criaInstanciaTabelaParametro(id.codigo, tipo));
+				FUN.tipoParametros.push_back(tipo);
+			} else {
+				if(FUN.posicaoInicioOpcionais == -1) {
+					FUN.posicaoInicioOpcionais = FUN.tipoParametros.size();
+				}
+				stringRetorno = outrosParametros + geraCodigoDeclaParametro(id, exprecao, tipo);
+				FUN.tipoParametros.push_back(tipo);
+			}
+		} else {
+			if(isStructVazia(exprecao)) {
+				FUN.parametros.push_back(criaInstanciaTabelaParametro(id.codigo, tipo));
+				FUN.tipoParametros.push_back(tipo);
+			} else {
+				if(FUN.posicaoInicioOpcionais == -1) {
+					FUN.posicaoInicioOpcionais = FUN.tipoParametros.size();
+				}
+				stringRetorno = geraCodigoDeclaParametro(id, exprecao, tipo);
+				FUN.tipoParametros.push_back(tipo);
+			}
+		}
+
+		return stringRetorno;
+	}
+
+	void geraCodigoDeclaracaoStringParametro(string variavel, string tamanhoString) {
+		
+		string tamanhoDeclaracao = to_string(calculaTamanhoMaximoString( stoi(tamanhoString) ));
+
+		FUN.mapDeclaracoes[variavel] = "\t" + variavel + "=(char*)malloc(" + tamanhoDeclaracao + "*sizeof(char));\n";
+	}
+
+	string criaInstanciaTabelaParametro(string variavel, string tipo, string tamanho) {
+		unordered_map<string, caracteristicas> auxMap = FUN.pilhaMaps.back();
+		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = auxMap.find(variavel);
+
+		if ( linhaDaVariavel == auxMap.end() ){
+			caracteristicas novaVariavel;
+
+			novaVariavel.temporaria = criaVariavelTemp();
+
+			novaVariavel.tipo = tipo;
+
+
+			if (tipo == "str")
+			{
+				string tempTamanho = criaVariavelTemp();
+
+				FUN.mapDeclaracoes[tempTamanho] = "\tint " + tempTamanho + "=" + tamanho + ";\n";
+				geraCodigoDeclaracaoStringParametro(novaVariavel.temporaria, tamanho);
+
+				novaVariavel.tamanho = tempTamanho;
+			}
+
+			(FUN.pilhaMaps.back())[variavel] = novaVariavel;
+
+			return novaVariavel.temporaria;
+		}
+		else {
+			return (FUN.pilhaMaps.back())[variavel].temporaria;
+		}
+		return "";
+	}
+
+	string geraCodigoDeclaParametro(atributos id, atributos exprecao, string tipo) {
+		atributos structRetorno;
+
+		id.tipo = tipo;
+		
+		string aux;
+
+		if (tipo == "str") {
+			if(id.tipo == exprecao.tipo)
+			{			
+				aux = criaInstanciaTabelaParametro(id.codigo, tipo);
+				
+				FUN.parametrosOpcionais.push_back(aux);
+
+				structRetorno.tipo = id.tipo;
+
+				structRetorno.tamanho = criaVariavelTemp();
+
+				structRetorno.codigo += exprecao.codigo;
+				structRetorno.codigo += geraCodigoCalculaTamanhoMaximoString(exprecao.tamanho, structRetorno.tamanho);
+				structRetorno.codigo += "\tstrcpy(" + aux + "," + exprecao.conteudo + ");\n";
+				adicionaTamanho(id.codigo, FUN.mapAtual, exprecao.tamanho);
+			}
+			else
+			{
+				//TODO COERCAO PARA STRING
+				yyerror("não existe coerção para string");
+			}
+		} else {
+			if(id.tipo == exprecao.tipo)
+			{
+				structRetorno.conteudo = criaInstanciaTabelaParametro(id.codigo, tipo);
+				FUN.parametrosOpcionais.push_back(structRetorno.conteudo);
+				structRetorno.tipo = id.tipo;
+				structRetorno.codigo = exprecao.codigo + "\t" + structRetorno.conteudo + "=" + exprecao.conteudo + ";\n";
+			}
+			else
+			{
+				structRetorno.conteudo = "";
+				geraCodigoCoercao(structRetorno, id, exprecao, "declaracaoParametro");
+			}
+		}
+		return structRetorno.codigo;
+	}
+
+	string adicionaDeclaracoesFuncao(void) {
+		string retorno;
+		if(! FUN.mapDeclaracoes.empty()) {
+			for(auto& declaracao: FUN.mapDeclaracoes) {
+				retorno += declaracao.second;
+			}
+			retorno += "\n";
+		}
+		return retorno;
+	}
+
+	atributos geraCodigoDeclaracaoFuncao(atributos id, atributos parametros, atributos retorno, atributos comandos) {
+		string temporaria;
+
+		if(pilhaFuncao[funcaoAtual - 1].mapFuncoes.find(id.codigo) == pilhaFuncao[funcaoAtual - 1].mapFuncoes.end()) {
+			vector<identificadorFuncao> vectorFistIdentificador;
+			pilhaFuncao[funcaoAtual - 1].mapFuncoes[id.codigo] = vectorFistIdentificador;
+
+			identificadorFuncao fistIdentificador;
+
+			fistIdentificador.tipoParametros = pilhaFuncao[funcaoAtual].tipoParametros;
+			temporaria = criaVariavelTemp();
+			fistIdentificador.temporaria = temporaria;
+			fistIdentificador.posicaoInicioOpcionais = pilhaFuncao[funcaoAtual].posicaoInicioOpcionais;
+
+			pilhaFuncao[funcaoAtual - 1].mapFuncoes[id.codigo].push_back(fistIdentificador);			
+		} else {
+			for(auto funcao : pilhaFuncao[funcaoAtual - 1].mapFuncoes[id.codigo]) {
+				if(funcao.tipoParametros == pilhaFuncao[funcaoAtual].tipoParametros) {
+					yyerror("Assinatura de função já existe nesse escopo.");
+				}
+			}
+			identificadorFuncao fistIdentificador;
+
+			fistIdentificador.tipoParametros = pilhaFuncao[funcaoAtual].tipoParametros;
+			temporaria = criaVariavelTemp();
+
+			fistIdentificador.temporaria = temporaria;
+
+			pilhaFuncao[funcaoAtual - 1].mapFuncoes[id.codigo].push_back(fistIdentificador);
+		}
+
+		string codigo;
+
+		if(retorno.tipo == "") {
+			codigo += "void " + temporaria + "(";
+		} else {
+			if(FUN.semRetorno) {
+				yyerror("a função \"" + id.codigo + "\" deve ter retorno de acordo com sua declaração.");
+			}
+			if(retorno.tipo == "bool") {
+				codigo += "int " + temporaria + "(";
+			} else if (retorno.tipo == "str") {
+				codigo += "char* " + temporaria + "(";
+			} else {
+				codigo += retorno.tipo + " " + temporaria + "(";
+			}
+		}
+
+		int local;
+		int auxTamanho = FUN.tipoParametros.size();
+		
+		for(local = 0; local < auxTamanho - 1; local++) {
+			if(FUN.posicaoInicioOpcionais == -1) {
+				codigo += FUN.tipoParametros[local] + " " + FUN.parametros[local] + ",";
+			} else {
+				if(local < FUN.posicaoInicioOpcionais)
+					codigo += FUN.tipoParametros[local] + " " + FUN.parametros[local] + ",";
+				else
+					codigo += FUN.tipoParametros[local] + " " + FUN.parametrosOpcionais[local - FUN.posicaoInicioOpcionais] + ",";
+			}
+		}
+
+		if(local < auxTamanho) {
+			if(FUN.posicaoInicioOpcionais == -1)
+				codigo += FUN.tipoParametros[local] + " " + FUN.parametros[local] + ") {\n";
+			else
+				codigo += FUN.tipoParametros[local] + " " + FUN.parametrosOpcionais[local - FUN.posicaoInicioOpcionais] + ") {\n";
+		} else {
+			codigo += ") {\n";
+		}
+
+		codigo += adicionaDeclaracoesFuncao() + parametros.codigo + comandos.codigo + "}\n\n";
+
+		declaracoesString += codigo;
+		return structVazia();
+	}
+// ------------------------------------------------------------------------------------------

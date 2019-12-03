@@ -1,10 +1,6 @@
 %{
   #include <string>
   #include <iostream>
-  char* bufferStr = (char*)malloc(sizeof(char)*50);
-  int tamBuffer = 50;
-  int auxEscala = 4;
-  int tamAtual = 0;
 %}
 
 ALPHANUM [0-1a-zA-Z]
