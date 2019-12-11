@@ -51,24 +51,29 @@
 
 	typedef struct {
 		vector<string> tipoParametros;
-		string temporaria;
+
+		vector<atributos> valoresParaParametros;
+
 		int posicaoInicioOpcionais = -1;
+		string tipoRetorno;
+		string temporaria;
 	} identificadorFuncao;
 
 	typedef struct {
-		unordered_map<string, vector<identificadorFuncao>> mapFuncoes;
-		vector<string> parametros;
+		unordered_map<string, vector< identificadorFuncao >> mapFuncoes;
+		vector<atributos> valoresParaParametros;
 		vector<string> parametrosOpcionais;
-		vector<string> tipoParametros;
 		int posicaoInicioOpcionais = -1;
-		string tipoReturn;
+		vector<string> tipoParametros;
+		vector<string> parametros;
+		string tipoRetorno;
 
 		bool semRetorno = true;
 
-		// usado para as declaracoes de variaveis
+
 		map<string, string, compare_map_tmp> mapDeclaracoes;
 
-		//usados para manter contexto de blocos
+
 		vector< unordered_map<string, caracteristicas> > pilhaMaps;
 		vector< informacoesSwitch > pilhaInformacoesSwitch;
 		vector< flagsBloco > pilhaFlagsBlocos;
@@ -94,7 +99,6 @@
 		vector< int > auxQualParametro;
 
 		#define FUN pilhaFuncao[funcaoAtual]
-
 	// Funcoes de utilidade ----------------------------------------------------------------------
 		string criaInstanciaTabela(string, string = "", string="0");
 		void criaFlagLoop(string&, string&, string&);
@@ -211,17 +215,13 @@
 
 		atributos geraCodigoReturn(atributos);
 
-		string geraCodigoParametros(string, string, atributos, atributos);
-
-		void geraCodigoDeclaracaoStringParametro(string, string);
+		void setaCodigoParametros(string, atributos, atributos);
 
 		string criaInstanciaTabelaParametro(string, string, string="0");
 
-		string adicionaDeclaracoesFuncao(void) ;
+		string adicionaDeclaracoesFuncao(void);
 
-		string geraCodigoDeclaParametro(atributos, atributos, string);
-
-		atributos geraCodigoDeclaracaoFuncao(atributos, atributos, atributos, atributos);
+		atributos geraCodigoDeclaracaoFuncao(string, atributos);
 
 %}
 
@@ -538,105 +538,6 @@ OUTPUT		: TK_OUTPUT '(' ES ')'
 			}
 			;
 
-DECLA_FUN	: AUX_FUN TK_ID '(' AUX_PARAM ')' TK_SETA AUX_TIPO_R '{' COMANDOS '}'
-			{
-				$$ = geraCodigoDeclaracaoFuncao($2, $4, $7, $9);
-				retiraDoMap();
-				retiraDoMapFuncoes();
-			}
-			| AUX_FUN TK_ID '(' AUX_PARAM ')' '{' COMANDOS '}'
-			{
-				$$ = geraCodigoDeclaracaoFuncao($2, $4, structVazia(), $7);
-				retiraDoMap();
-				retiraDoMapFuncoes();
-			}
-			;
-
-AUX_FUN		: TK_DEF
-			{
-				adicionaNoMapFuncoes();
-				adicionaNoMap();
-			}
-			;
-
-AUX_TIPO 	: TK_TIPO_BOOL
-			{
-				$$.tipo = "bool";
-			}
-			| TK_TIPO_DOUBLE
-			{
-				$$.tipo = "double";
-			}
-			| TK_TIPO_STR
-			{
-				$$.tipo = "str";
-			}
-			| TK_TIPO_FLOAT
-			{
-				$$.tipo = "float";
-			}
-			| TK_TIPO_INT
-			{
-				$$.tipo = "int";
-			}
-			;
-
-AUX_TIPO_R 	: AUX_TIPO
-			{
-				FUN.tipoReturn = $1.tipo;
-				$$.tipo = $1.tipo;
-			}
-			| TK_TIPO_VOID
-			{
-				FUN.tipoReturn = "void";
-				$$.tipo = "void";
-			}
-			;
-
-AUX_PARAM	: PARAM_DECLA ',' PARAM
-			{
-				$$.codigo = $1.codigo + $3.codigo;
-			}
-			| PARAM_DECLA
-			{
-				$$ = $1;
-			}
-			| PARAM
-			{
-				$$ = $1;
-			}
-			|
-			{
-				$$.codigo = "";
-			}
-			;
-
-PARAM_DECLA	: PARAM_DECLA ',' AUX_TIPO TK_ID
-			{
-				$$.codigo = geraCodigoParametros($1.codigo, $3.tipo, $4, structVazia());
-			}
-			| AUX_TIPO TK_ID
-			{
-				$$.codigo = geraCodigoParametros("", $1.tipo, $2, structVazia());
-			}
-			;
-
-PARAM		: PARAM ',' AUX_TIPO TK_ID '=' E
-			{
-				$$.codigo = geraCodigoParametros($1.codigo, $3.tipo, $4, $6);
-			}
-			| AUX_TIPO TK_ID '=' E
-			{
-				$$.codigo = geraCodigoParametros("", $1.tipo, $2, $4);
-			}
-			;
-
-RETURN		: TK_RETURN E
-			{
-				$$ = geraCodigoReturn($2);
-			}
-			;
-
 ES			: E ',' ES
 			{
 				$$ = geraCodigoParaMultiploOutput($1, $3);
@@ -780,17 +681,13 @@ E 			: E '+' E
 			}
 			;
 
-AUX_C_FUN	: E ',' AUX_C_FUN
+AUX_C_FUN	: AUX_C_FUN ',' E
 			{
-				$$ = geraCodigoExpreDeclaraFuncao($1, $3);
+				$$ = geraCodigoExpreDeclaraFuncao($3, $1);
 			}
 			| E
 			{
 				$$ = geraCodigoExpreDeclaraFuncao($1, structVazia());
-			}
-			|
-			{
-				$$ = structVazia();
 			}
 			;
 
@@ -798,6 +695,123 @@ AUX_F_C		: TK_ID
 			{
 				verificaExistenciaFuncao($1.codigo, funcaoAtual);
 				$$.codigo = $1.codigo;
+			}
+			;
+
+DECLA_FUN	: AUX_FUN TK_ID AUX_PARAM TK_SETA AUX_TIPO_R '{' COMANDOS '}'
+			{
+				$$ = geraCodigoDeclaracaoFuncao($2.codigo, $7);
+				retiraDoMap();
+				retiraDoMapFuncoes();
+			}
+			| AUX_FUN TK_ID AUX_PARAM '{' COMANDOS '}'
+			{
+				$$ = geraCodigoDeclaracaoFuncao($2.codigo, $5);
+				retiraDoMap();
+				retiraDoMapFuncoes();
+			}
+			;
+
+AUX_FUN		: TK_DEF
+			{
+				adicionaNoMapFuncoes();
+				adicionaNoMap();
+			}
+			;
+
+AUX_TIPO 	: TK_TIPO_BOOL
+			{
+				$$.tipo = "bool";
+			}
+			| TK_TIPO_DOUBLE
+			{
+				$$.tipo = "double";
+			}
+			| TK_TIPO_STR
+			{
+				$$.tipo = "str";
+			}
+			| TK_TIPO_FLOAT
+			{
+				$$.tipo = "float";
+			}
+			| TK_TIPO_INT
+			{
+				$$.tipo = "int";
+			}
+			;
+
+AUX_TIPO_R 	: AUX_TIPO
+			{
+				FUN.tipoRetorno = $1.tipo;
+				$$.tipo = $1.tipo;
+			}
+			| TK_TIPO_VOID
+			{
+				FUN.tipoRetorno = "void";
+				$$.tipo = "void";
+			}
+			;
+
+AUX_PARAM	: '(' PARAM_DECLA ',' PARAM ')'
+			{
+				$$.codigo = $2.codigo + $4.codigo;
+			}
+			| '(' PARAM_DECLA ')'
+			{
+				$$ = $2;
+			}
+			| '(' PARAM ')'
+			{
+				$$ = $2;
+			}
+			|
+			{
+				$$.codigo = "";
+			}
+			;
+
+PARAM_DECLA	: PARAM_DECLA ',' AUX_TIPO TK_ID
+			{
+				setaCodigoParametros($3.tipo, $4, structVazia());
+			}
+			| AUX_TIPO TK_ID
+			{
+				setaCodigoParametros($1.tipo, $2, structVazia());
+			}
+			;
+
+PARAM		: PARAM ',' AUX_TIPO TK_ID '=' E_FUN
+			{
+				setaCodigoParametros($3.tipo, $4, $6);
+			}
+			| AUX_TIPO TK_ID '=' E_FUN
+			{
+				setaCodigoParametros($1.tipo, $2, $4);
+			}
+			;
+
+E_FUN		: TK_BOOL
+			{
+				$$ = $1;
+			}
+			| TK_INT
+			{
+				$$ = $1;
+			}
+			| TK_FLOAT
+			{
+				$$ = $1;
+			}
+			| TK_STR
+			{
+				$$ = $1;
+			}
+			;
+
+RETURN		: TK_RETURN E
+			{
+				$$ = geraCodigoReturn($2);
 			}
 			;
 
@@ -1699,6 +1713,7 @@ int main( int argc, char* argv[] ) {
 		if(elementoUm.tipo == elementoDois.tipo)
 		{
 			structRetorno.tipo = elementoUm.tipo;
+			//TODO SOMA DE STR TÁ ERRADO
 			//TODO MAIS OPERACOES COM STRING E REFATORAR ISSO !!!!
 			if (structRetorno.tipo == "str" && operacao == "+") {
 				
@@ -2168,34 +2183,29 @@ int main( int argc, char* argv[] ) {
 		int auxQualPara = auxQualParametro.back();
 		bool teveMatch = false;
 
+		int quantidadeRemovidos = 0;
+		int temporariaParaFimLoop = auxIdentifica.size();
+		for(int i = 0; i < temporariaParaFimLoop; i++) {
+			if(auxIdentifica[i].tipoParametros[auxQualPara] == exprecao.tipo) {
+				if(!teveMatch) {
+					auxQualParametro.back() += 1;
+					teveMatch = true;
+				}
+			} else {
+				(auxChamadaFuncao[auxChamadaFuncao.size()-1]).erase((auxChamadaFuncao[auxChamadaFuncao.size()-1]).begin() + i - quantidadeRemovidos);
+				quantidadeRemovidos++;
+			}
+		}
+
 		atributos structRetorno;
 
-		cout << "aqui geraCodigoExpreDeclaraFuncao "<< auxQualPara << " " << exprecao.tipo <<endl;
-
-		for(auto identificador : auxIdentifica) {
-			cout << "tipos -------" << endl;
-			for(auto tipo : identificador.tipoParametros) {
-				cout << tipo << " ";
-			}
-			cout << endl;
-		}
-
-		for(int i = 0; i < auxIdentifica.size(); i++) {
-			if(auxIdentifica[i].tipoParametros[auxQualPara] == exprecao.tipo) {
-				auxQualParametro.back() += 1;
-				teveMatch = true;
-			} else {
-				(auxChamadaFuncao[auxChamadaFuncao.size()-1]).erase((auxChamadaFuncao[auxChamadaFuncao.size()-1]).begin() + i);
-			}
-		}
-		cout << auxQualParametro.back() << endl;
 		if(teveMatch) {
 			if(isStructVazia(outrasExprecoes)) {
 				structRetorno.codigo += exprecao.codigo;
 				structRetorno.conteudo += exprecao.conteudo;
 			} else {
-				structRetorno.codigo += exprecao.codigo + outrasExprecoes.codigo;
-				structRetorno.conteudo += exprecao.conteudo + ',' + outrasExprecoes.conteudo;
+				structRetorno.codigo += outrasExprecoes.codigo + exprecao.codigo;
+				structRetorno.conteudo += outrasExprecoes.conteudo + ',' + exprecao.conteudo;
 			}
 		} else {
 			yyerror("Não foi possivel encontrar sobrecarga para a função.");
@@ -2210,26 +2220,49 @@ int main( int argc, char* argv[] ) {
 
 		atributos structRetorno;
 
-		if(auxQualParame < auxIdentifica.posicaoInicioOpcionais) {
-			yyerror("faltam parametros na função \"" + id.codigo + "\"");
+		if (auxQualParame > auxIdentifica.tipoParametros.size()) {
+			yyerror("Foram colocados parametros demais na chamada da função \"" + id.codigo + "\"");
+		} else {
+			if(auxIdentifica.posicaoInicioOpcionais == -1) {
+				if(auxQualParame < auxIdentifica.tipoParametros.size()) {
+					yyerror("Faltam parametros na função \"" + id.codigo + "\"");
+				}
+			} else if(auxQualParame < auxIdentifica.posicaoInicioOpcionais) {
+				yyerror("Faltam parametros na função \"" + id.codigo + "\"");
+			}
 		}
 
 		structRetorno.conteudo = parametros.conteudo;
+		structRetorno.codigo += parametros.codigo;
 
-		for(int i = auxQualParame; i < auxIdentifica.tipoParametros.size(); i++) {
+		int auxInicioValoresNIniciados = auxQualParame - auxIdentifica.posicaoInicioOpcionais;
+		int auxFimLoop = auxIdentifica.tipoParametros.size();
+
+		atributos valorAtual;
+
+		for(int i = auxQualParame, j = 0; i < auxFimLoop; i++, j++) {
 			string temporaria = criaVariavelTemp();
-			if(auxIdentifica.tipoParametros[i] == "bool")
+			if(auxIdentifica.tipoParametros[i] == "bool") {
 				FUN.mapDeclaracoes[temporaria] = "\tint " + temporaria + ";\n";
-			else if (auxIdentifica.tipoParametros[i] == "str")
+				valorAtual = auxIdentifica.valoresParaParametros[auxInicioValoresNIniciados + j];
+				structRetorno.codigo += "\t" + temporaria + "=" + valorAtual.codigo + ";\n";
+			}
+			else if (auxIdentifica.tipoParametros[i] == "str") {
 				FUN.mapDeclaracoes[temporaria] = "\tchar* " + temporaria + ";\n";
-			else
+				valorAtual = auxIdentifica.valoresParaParametros[auxInicioValoresNIniciados + j];
+				structRetorno.codigo += "\tstrcpy(" + temporaria + "," + valorAtual.codigo + ");\n";
+			}
+			else {
 				FUN.mapDeclaracoes[temporaria] = "\t" + auxIdentifica.tipoParametros[i] + " " + temporaria + ";\n";
+				valorAtual = auxIdentifica.valoresParaParametros[auxInicioValoresNIniciados + j];
+				structRetorno.codigo += "\t" + temporaria + "=" + valorAtual.codigo + ";\n";
+			}
 
 			structRetorno.conteudo += "," + temporaria;
 		}
 
-		structRetorno.codigo += parametros.codigo;
 		structRetorno.conteudo = auxIdentifica.temporaria + "(" + structRetorno.conteudo + ")";
+		structRetorno.tipo = auxIdentifica.tipoRetorno;
 
 		return structRetorno;
 	}
@@ -2265,7 +2298,7 @@ int main( int argc, char* argv[] ) {
 		
 		atributos elementoUm;
 		
-		elementoUm.tipo = FUN.tipoReturn;
+		elementoUm.tipo = FUN.tipoRetorno;
 
 		if(elementoUm.tipo == exprecao.tipo)
 			structRetorno.codigo = exprecao.codigo + "\treturn " + exprecao.conteudo + ";\n";
@@ -2278,52 +2311,28 @@ int main( int argc, char* argv[] ) {
 		return structRetorno;
 	}
 
-	string geraCodigoParametros(string outrosParametros, string tipo, atributos id, atributos exprecao) {
-		string stringRetorno;
-		if(outrosParametros != "") {
-			if(isStructVazia(exprecao)) {
-				stringRetorno = outrosParametros;
-				FUN.parametros.push_back(criaInstanciaTabelaParametro(id.codigo, tipo));
-				FUN.tipoParametros.push_back(tipo);
-			} else {
-				if(FUN.posicaoInicioOpcionais == -1) {
-					FUN.posicaoInicioOpcionais = FUN.tipoParametros.size();
-				}
-				stringRetorno = outrosParametros + geraCodigoDeclaParametro(id, exprecao, tipo);
-				FUN.tipoParametros.push_back(tipo);
-			}
+	void setaCodigoParametros(string tipo, atributos id, atributos valor) {
+		if(isStructVazia(valor)) {
+			FUN.parametros.push_back(criaInstanciaTabelaParametro(id.codigo, tipo));
+			FUN.tipoParametros.push_back(tipo);
 		} else {
-			if(isStructVazia(exprecao)) {
-				FUN.parametros.push_back(criaInstanciaTabelaParametro(id.codigo, tipo));
-				FUN.tipoParametros.push_back(tipo);
-			} else {
-				if(FUN.posicaoInicioOpcionais == -1) {
-					FUN.posicaoInicioOpcionais = FUN.tipoParametros.size();
-				}
-				stringRetorno = geraCodigoDeclaParametro(id, exprecao, tipo);
-				FUN.tipoParametros.push_back(tipo);
+			if(FUN.posicaoInicioOpcionais == -1) {
+				FUN.posicaoInicioOpcionais = FUN.tipoParametros.size();
 			}
+			FUN.parametrosOpcionais.push_back(criaInstanciaTabelaParametro(id.codigo, tipo));
+			FUN.valoresParaParametros.push_back(valor);
+			FUN.tipoParametros.push_back(tipo);
 		}
-
-		return stringRetorno;
-	}
-
-	void geraCodigoDeclaracaoStringParametro(string variavel, string tamanhoString) {
-		
-		string tamanhoDeclaracao = to_string(calculaTamanhoMaximoString( stoi(tamanhoString) ));
-
-		FUN.mapDeclaracoes[variavel] = "\t" + variavel + "=(char*)malloc(" + tamanhoDeclaracao + "*sizeof(char));\n";
 	}
 
 	string criaInstanciaTabelaParametro(string variavel, string tipo, string tamanho) {
 		unordered_map<string, caracteristicas> auxMap = FUN.pilhaMaps.back();
 		unordered_map<string, caracteristicas>::const_iterator linhaDaVariavel = auxMap.find(variavel);
 
-		if ( linhaDaVariavel == auxMap.end() ){
+		if ( linhaDaVariavel == auxMap.end() ) {
 			caracteristicas novaVariavel;
 
 			novaVariavel.temporaria = criaVariavelTemp();
-
 			novaVariavel.tipo = tipo;
 
 
@@ -2332,8 +2341,6 @@ int main( int argc, char* argv[] ) {
 				string tempTamanho = criaVariavelTemp();
 
 				FUN.mapDeclaracoes[tempTamanho] = "\tint " + tempTamanho + "=" + tamanho + ";\n";
-				geraCodigoDeclaracaoStringParametro(novaVariavel.temporaria, tamanho);
-
 				novaVariavel.tamanho = tempTamanho;
 			}
 
@@ -2347,51 +2354,6 @@ int main( int argc, char* argv[] ) {
 		return "";
 	}
 
-	string geraCodigoDeclaParametro(atributos id, atributos exprecao, string tipo) {
-		atributos structRetorno;
-
-		id.tipo = tipo;
-		
-		string aux;
-
-		if (tipo == "str") {
-			if(id.tipo == exprecao.tipo)
-			{			
-				aux = criaInstanciaTabelaParametro(id.codigo, tipo);
-				
-				FUN.parametrosOpcionais.push_back(aux);
-
-				structRetorno.tipo = id.tipo;
-
-				structRetorno.tamanho = criaVariavelTemp();
-
-				structRetorno.codigo += exprecao.codigo;
-				structRetorno.codigo += geraCodigoCalculaTamanhoMaximoString(exprecao.tamanho, structRetorno.tamanho);
-				structRetorno.codigo += "\tstrcpy(" + aux + "," + exprecao.conteudo + ");\n";
-				adicionaTamanho(id.codigo, FUN.mapAtual, exprecao.tamanho);
-			}
-			else
-			{
-				//TODO COERCAO PARA STRING
-				yyerror("não existe coerção para string");
-			}
-		} else {
-			if(id.tipo == exprecao.tipo)
-			{
-				structRetorno.conteudo = criaInstanciaTabelaParametro(id.codigo, tipo);
-				FUN.parametrosOpcionais.push_back(structRetorno.conteudo);
-				structRetorno.tipo = id.tipo;
-				structRetorno.codigo = exprecao.codigo + "\t" + structRetorno.conteudo + "=" + exprecao.conteudo + ";\n";
-			}
-			else
-			{
-				structRetorno.conteudo = "";
-				geraCodigoCoercao(structRetorno, id, exprecao, "declaracaoParametro");
-			}
-		}
-		return structRetorno.codigo;
-	}
-
 	string adicionaDeclaracoesFuncao(void) {
 		string retorno;
 		if(! FUN.mapDeclaracoes.empty()) {
@@ -2403,70 +2365,81 @@ int main( int argc, char* argv[] ) {
 		return retorno;
 	}
 
-	atributos geraCodigoDeclaracaoFuncao(atributos id, atributos parametros, atributos retorno, atributos comandos) {
+	atributos geraCodigoDeclaracaoFuncao(string id, atributos comandos) {
 		string temporaria;
 
-		if(pilhaFuncao[funcaoAtual - 1].mapFuncoes.find(id.codigo) == pilhaFuncao[funcaoAtual - 1].mapFuncoes.end()) {
+		if(pilhaFuncao[funcaoAtual - 1].mapFuncoes.find(id) == pilhaFuncao[funcaoAtual - 1].mapFuncoes.end()) {
 			vector<identificadorFuncao> vectorFistIdentificador;
-			pilhaFuncao[funcaoAtual - 1].mapFuncoes[id.codigo] = vectorFistIdentificador;
+			pilhaFuncao[funcaoAtual - 1].mapFuncoes[id] = vectorFistIdentificador;
 
 			identificadorFuncao fistIdentificador;
-
-			fistIdentificador.tipoParametros = pilhaFuncao[funcaoAtual].tipoParametros;
 			temporaria = criaVariavelTemp();
-			fistIdentificador.temporaria = temporaria;
-			fistIdentificador.posicaoInicioOpcionais = pilhaFuncao[funcaoAtual].posicaoInicioOpcionais;
 
-			pilhaFuncao[funcaoAtual - 1].mapFuncoes[id.codigo].push_back(fistIdentificador);			
+			fistIdentificador.temporaria = temporaria;
+			fistIdentificador.tipoParametros = FUN.tipoParametros;
+			fistIdentificador.valoresParaParametros = FUN.valoresParaParametros;
+			fistIdentificador.posicaoInicioOpcionais = FUN.posicaoInicioOpcionais;
+			if(FUN.tipoRetorno == "")
+				fistIdentificador.tipoRetorno = "void";
+			else
+				fistIdentificador.tipoRetorno = FUN.tipoRetorno;
+
+			pilhaFuncao[funcaoAtual - 1].mapFuncoes[id].push_back(fistIdentificador);			
 		} else {
-			for(auto funcao : pilhaFuncao[funcaoAtual - 1].mapFuncoes[id.codigo]) {
-				if(funcao.tipoParametros == pilhaFuncao[funcaoAtual].tipoParametros) {
+			for (auto funcao : pilhaFuncao[funcaoAtual - 1].mapFuncoes[id]) {
+				if(funcao.tipoParametros == FUN.tipoParametros) {
 					yyerror("Assinatura de função já existe nesse escopo.");
 				}
 			}
-			identificadorFuncao fistIdentificador;
 
-			fistIdentificador.tipoParametros = pilhaFuncao[funcaoAtual].tipoParametros;
+			identificadorFuncao fistIdentificador;
 			temporaria = criaVariavelTemp();
 
 			fistIdentificador.temporaria = temporaria;
+			fistIdentificador.tipoParametros = FUN.tipoParametros;
+			fistIdentificador.valoresParaParametros = FUN.valoresParaParametros;
+			fistIdentificador.posicaoInicioOpcionais = FUN.posicaoInicioOpcionais;
+			if(FUN.tipoRetorno == "")
+				fistIdentificador.tipoRetorno = "void";
+			else
+				fistIdentificador.tipoRetorno = FUN.tipoRetorno;
 
-			pilhaFuncao[funcaoAtual - 1].mapFuncoes[id.codigo].push_back(fistIdentificador);
+			pilhaFuncao[funcaoAtual - 1].mapFuncoes[id].push_back(fistIdentificador);
 		}
 
 		string codigo;
 
-		if(retorno.tipo == "") {
+		if (FUN.tipoRetorno == "") {
 			codigo += "void " + temporaria + "(";
 		} else {
-			if(FUN.semRetorno) {
-				yyerror("a função \"" + id.codigo + "\" deve ter retorno de acordo com sua declaração.");
+			if (FUN.semRetorno) {
+				yyerror("a função \"" + id + "\" deve ter retorno de acordo com sua declaração.");
 			}
-			if(retorno.tipo == "bool") {
+			if (FUN.tipoRetorno == "bool") {
 				codigo += "int " + temporaria + "(";
-			} else if (retorno.tipo == "str") {
+			} else if (FUN.tipoRetorno == "str") {
 				codigo += "char* " + temporaria + "(";
 			} else {
-				codigo += retorno.tipo + " " + temporaria + "(";
+				codigo += FUN.tipoRetorno + " " + temporaria + "(";
 			}
 		}
 
 		int local;
 		int auxTamanho = FUN.tipoParametros.size();
-		
-		for(local = 0; local < auxTamanho - 1; local++) {
-			if(FUN.posicaoInicioOpcionais == -1) {
+
+		for (local = 0; local < auxTamanho - 1; local++) {
+			if (FUN.posicaoInicioOpcionais == -1) {
 				codigo += FUN.tipoParametros[local] + " " + FUN.parametros[local] + ",";
 			} else {
-				if(local < FUN.posicaoInicioOpcionais)
+				if (local < FUN.posicaoInicioOpcionais)
 					codigo += FUN.tipoParametros[local] + " " + FUN.parametros[local] + ",";
 				else
 					codigo += FUN.tipoParametros[local] + " " + FUN.parametrosOpcionais[local - FUN.posicaoInicioOpcionais] + ",";
 			}
 		}
 
-		if(local < auxTamanho) {
-			if(FUN.posicaoInicioOpcionais == -1)
+		if (local < auxTamanho) {
+			if (FUN.posicaoInicioOpcionais == -1)
 				codigo += FUN.tipoParametros[local] + " " + FUN.parametros[local] + ") {\n";
 			else
 				codigo += FUN.tipoParametros[local] + " " + FUN.parametrosOpcionais[local - FUN.posicaoInicioOpcionais] + ") {\n";
@@ -2474,7 +2447,7 @@ int main( int argc, char* argv[] ) {
 			codigo += ") {\n";
 		}
 
-		codigo += adicionaDeclaracoesFuncao() + parametros.codigo + comandos.codigo + "}\n\n";
+		codigo += adicionaDeclaracoesFuncao() + comandos.codigo + "}\n\n";
 
 		declaracoesString += codigo;
 		return structVazia();

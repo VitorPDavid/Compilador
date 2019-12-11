@@ -27,7 +27,7 @@ STRAP '([^\\']|\\.)*'
 [ ]+             {}
 [\t]+            {}
 
-{STRAS}          { yylval.codigo = yytext; yylval.tipo = "str"; yylval.tamanho = to_string(yyleng - 2);return TK_STR;}
+{STRAS}          { yylval.codigo = yytext; yylval.tipo = "str"; yylval.tamanho = to_string(yyleng - 2); return TK_STR;}
 
 "int"            { yylval.codigo = yytext; yylval.tipo = "t_int"; return TK_TIPO_INT; }
 "float"          { yylval.codigo = yytext; yylval.tipo = "t_float"; return TK_TIPO_FLOAT; }
